@@ -171,18 +171,19 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 .pay-r{border-left:3px solid var(--gn)!important}.pay-o{border-left:3px solid var(--or)!important}.pay-x{border-left:3px solid var(--rd)!important}
 .timing-chip{display:inline-flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--bd);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
 @media(max-width:768px){
-  .sidebar{transform:translateX(-240px);transition:transform .25s ease;box-shadow:none}
-  .sidebar.open{transform:translateX(0);box-shadow:4px 0 24px rgba(0,0,0,.5)}
-  .sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:99}
+  .sidebar{transform:translateX(-240px);transition:transform .28s cubic-bezier(.4,0,.2,1);box-shadow:none;z-index:200}
+  .sidebar.open{transform:translateX(0);box-shadow:6px 0 32px rgba(0,0,0,.6)}
+  .sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:199;backdrop-filter:blur(2px)}
   .sb-overlay.open{display:block}
   .main-area{margin-left:0}
   .charts-row{grid-template-columns:1fr}
   .job-timer{font-size:26px;min-width:70px}
-  .hamburger{display:flex}
+  .hamburger{display:flex!important}
+  .pg-header{padding:12px 14px}
 }
 @media(min-width:769px){.hamburger{display:none!important}.sb-overlay{display:none!important}}
 @media(max-width:480px){.fg{grid-template-columns:1fr}.fg3{grid-template-columns:1fr 1fr}.sg{grid-template-columns:1fr 1fr}.job-controls{flex-direction:row}}
-.hamburger{align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:var(--s2);border:1px solid var(--bd);cursor:pointer;font-size:18px;flex-shrink:0}`;
+.hamburger{align-items:center;justify-content:center;width:38px;height:38px;border-radius:8px;background:var(--ac);color:#000;border:none;cursor:pointer;font-size:20px;flex-shrink:0;font-weight:700}`;
 
 const G=()=><style>{CSS}</style>;
 function Toast({msg,onDone}){useEffect(()=>{const t=setTimeout(onDone,2400);return()=>clearTimeout(t);},[]);return <div className="toast">✓ {msg}</div>;}
