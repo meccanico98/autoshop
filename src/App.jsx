@@ -1,10 +1,7 @@
-
-raw
-App · JSX
 import React, { useState, useEffect, useRef } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import * as XLSX from "xlsx";
- 
+
 const SBU="https://kxpqgomkuftwdrvuoiyr.supabase.co";
 const SBK="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4cHFnb21rdWZ0d2RydnVvaXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NjMyMjksImV4cCI6MjA5NjEzOTIyOX0.1x9379Q-0oC9ZEZAx7oKdUIyBS4bcsi7MpFJUUo7RSU";
 const SH={"Content-Type":"application/json",apikey:SBK,Authorization:`Bearer ${SBK}`};
@@ -12,16 +9,16 @@ const sbGet=async(t,q="")=>{try{const r=await fetch(`${SBU}/rest/v1/${t}?${q}`,{
 const sbPost=async(t,d)=>{try{const r=await fetch(`${SBU}/rest/v1/${t}`,{method:"POST",headers:{...SH,"Prefer":"return=representation"},body:JSON.stringify(d)});const j=await r.json();return Array.isArray(j)?j[0]:j;}catch{return null;}};
 const sbPatch=async(t,f,d)=>{try{const r=await fetch(`${SBU}/rest/v1/${t}?${f}`,{method:"PATCH",headers:{...SH,"Prefer":"return=representation"},body:JSON.stringify(d)});const j=await r.json();return Array.isArray(j)?j[0]:j;}catch{return null;}};
 const sbDel=async(t,f)=>{try{await fetch(`${SBU}/rest/v1/${t}?${f}`,{method:"DELETE",headers:SH});}catch{}};
- 
+
 const j2db=j=>({id:j.id,worker_id:j.workerId||"",worker_name:j.workerName||"",workshop_type:j.workshopType||"",client_type:j.clientType||"private",client_name:j.clientName||"",service:j.service||"",job_bill:j.jobBill||0,amount_paid:j.amountPaid||0,parts_cost:j.partsCost||0,profit:j.profit||0,due_amount:j.dueAmount||0,payment_status:j.paymentStatus||"unpaid",payment_method:j.paymentMethod||"cash",note:j.note||"",date:j.date||toDay(),started_at:j.startedAt||null,ended_at:j.endedAt||null,duration_ms:j.durationMs||0,fattura:j.fattura||false});
 const db2j=r=>({id:r.id,workerId:r.worker_id,workerName:r.worker_name,workshopType:r.workshop_type,clientType:r.client_type,clientName:r.client_name,service:r.service,jobBill:+r.job_bill||0,amount:+r.job_bill||0,amountPaid:+r.amount_paid||0,partsCost:+r.parts_cost||0,profit:+r.profit||0,dueAmount:+r.due_amount||0,paymentStatus:r.payment_status,paymentMethod:r.payment_method||"cash",note:r.note||"",date:r.date,timestamp:r.created_at,startedAt:r.started_at,endedAt:r.ended_at,durationMs:+r.duration_ms||0,fattura:r.fattura||false});
 const s2db=s=>({id:s.id,wid:s.wid,wname:s.wname,wtype:s.wtype,client_type:s.clientType,client_name:s.clientName,service:s.service,status:s.status,started_at:s.startedAt,resume_at:s.resumeAt,acc_ms:s.accMs,total_ms:s.totalMs,ended_at:s.endedAt});
 const db2s=r=>({id:r.id,wid:r.wid,wname:r.wname,wtype:r.wtype,clientType:r.client_type,clientName:r.client_name,service:r.service,status:r.status,startedAt:r.started_at,resumeAt:r.resume_at,accMs:+r.acc_ms||0,totalMs:r.total_ms!=null?+r.total_ms:null,endedAt:r.ended_at});
- 
+
 const DEF_USERS=[]; // Credentials stored in Supabase only
 const PMS=[{id:"cash",icon:"💵",label:"Cash"},{id:"card",icon:"💳",label:"Card"}];
 const STATUS={paid:{label:"✅ Paid",color:"#1DC8A0",bg:"rgba(29,200,160,.14)"},partial:{label:"🟠 Partial",color:"#FFA940",bg:"rgba(255,169,64,.14)"},unpaid:{label:"🔴 Unpaid",color:"#FF6B6B",bg:"rgba(255,107,107,.14)"}};
- 
+
 function toDay(){return new Date().toISOString().split("T")[0];}
 const money=n=>Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
 const fmtD=ts=>ts?new Date(ts).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—";
@@ -33,7 +30,7 @@ const dueAmt=j=>Math.max(0,(j.jobBill||j.amount||0)-(j.amountPaid??(j.jobBill||j
 const getEl=s=>{if(!s)return 0;if(s.status==="running")return s.accMs+(Date.now()-new Date(s.resumeAt).getTime());if(s.status==="paused")return s.accMs;return s.totalMs||0;};
 const fmtDur=ms=>{const t=Math.floor(Math.max(0,ms)/1000),h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=t%60;return h>0?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;};
 const prc=j=>pSt(j)==="paid"?"pay-r":pSt(j)==="partial"?"pay-o":"pay-x";
- 
+
 function openPDF(html,lbl){
   const ex=document.getElementById("__pov");if(ex)ex.remove();
   const p=new DOMParser(),doc=p.parseFromString(html,"text/html");
@@ -63,7 +60,7 @@ async function shareBlob(blob,fname){
   reader.readAsDataURL(blob);
 }
 function bldXL(jobs,lbl,mc){const h=mc?["#","Client","Service","From","To","Duration","Bill","Paid","Due","Parts","Profit","Status","Date"]:["#","Client","Service","From","To","Duration","Bill","Paid","Due","Status","Date"];return makeXL(lbl,[["AutoShop — "+lbl],[],h,...jobs.map((j,i)=>[i+1,j.clientName,j.service,j.startedAt?fmtT(j.startedAt):"—",j.endedAt?fmtT(j.endedAt):"—",j.durationMs?fmtDur(j.durationMs):"—",j.jobBill||0,j.amountPaid||0,dueAmt(j),...(mc?[j.partsCost||0,j.profit||0]:[]),STATUS[pSt(j)].label,fmtD(j.timestamp)])]);}
- 
+
 const CSS=`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#0D1117;--s1:#161C2B;--s2:#1C2333;--bd:#252E42;--ac:#1DC8A0;--ac2:#17A885;--rd:#FF6B6B;--gn:#1DC8A0;--bl:#4F9EF8;--or:#FFA940;--tx:#E6EAF3;--mt:#6B7A99;--sb:#0A0F1C;--sbbd:#141C2E;--r:10px}
@@ -186,11 +183,11 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 @media(min-width:769px){.hamburger{display:none!important}.sb-overlay{display:none!important}}
 @media(max-width:480px){.fg{grid-template-columns:1fr}.fg3{grid-template-columns:1fr 1fr}.sg{grid-template-columns:1fr 1fr}.job-controls{flex-direction:row}}
 .hamburger{align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:var(--s2);border:1px solid var(--bd);cursor:pointer;font-size:18px;flex-shrink:0}`;
- 
+
 const G=()=><style>{CSS}</style>;
 function Toast({msg,onDone}){useEffect(()=>{const t=setTimeout(onDone,2400);return()=>clearTimeout(t);},[]);return <div className="toast">✓ {msg}</div>;}
 const SBadge=({job})=>{const s=STATUS[pSt(job)];return <span style={{display:"inline-flex",alignItems:"center",padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,background:s.bg,color:s.color}}>{s.label}</span>;};
- 
+
 function ClientPicker({type,setType,name,setName,companies,recentClients=[],onAddCo}){
   const [add,setAdd]=useState(false);const [val,setVal]=useState("");
   const doAdd=()=>{const n=val.trim();if(n){onAddCo(n);setName(n);setVal("");setAdd(false);}};
@@ -221,7 +218,7 @@ function ClientPicker({type,setType,name,setName,companies,recentClients=[],onAd
     </div>}
   </>;
 }
- 
+
 function SvcPicker({services,sel,onSel,onAdd,cls}){
   const [add,setAdd]=useState(false);const [val,setVal]=useState("");
   const doAdd=()=>{const n=val.trim();if(n){onAdd(n);onSel(n);setVal("");setAdd(false);}};
@@ -239,8 +236,8 @@ function SvcPicker({services,sel,onSel,onAdd,cls}){
     </div>}
   </div>;
 }
- 
- 
+
+
 const FatturaPicker=({val,onChange})=><div className="f">
   <label>Fattura <span style={{fontSize:10,color:"var(--mt)",textTransform:"none",letterSpacing:0,fontWeight:400}}>(Invoice required?)</span></label>
   <div className="pills">
@@ -248,9 +245,9 @@ const FatturaPicker=({val,onChange})=><div className="f">
     <div className={"pt"+(val===false?" on":"")} style={val===false?{background:"rgba(107,122,153,.15)",borderColor:"var(--mt)",color:"var(--mt)"}:{}} onClick={()=>onChange(false)}>❌ No Invoice</div>
   </div>
 </div>;
- 
+
 const PmPicker=({val,onChange})=><div className="f"><label>Payment Method (How they paid)</label><div className="pills">{PMS.map(m=><div key={m.id} className={"pt"+(val===m.id?" on":"")} onClick={()=>onChange(m.id)}>{m.icon} {m.label}</div>)}</div></div>;
- 
+
 function PayBox({bill,paid}){
   const b=parseFloat(bill)||0,p=parseFloat(paid)||0,d=Math.max(0,b-p);
   const s=b>0?(p>=b?"paid":p<=0?"unpaid":"partial"):null;
@@ -262,7 +259,7 @@ function PayBox({bill,paid}){
     {s&&<div className="pi"><div className="lbl">Status</div><div style={{marginTop:4}}><span style={{display:"inline-block",padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,background:STATUS[s].bg,color:STATUS[s].color}}>{STATUS[s].label}</span></div></div>}
   </div>;
 }
- 
+
 function ManageList({icon,title,items,onAdd,onDel,ph}){
   const [val,setVal]=useState("");
   return <div className="ms">
@@ -274,7 +271,7 @@ function ManageList({icon,title,items,onAdd,onDel,ph}){
     </div>
   </div>;
 }
- 
+
 function EditModal({job,services,companies,recentClients=[],onSave,onClose,onAddSvc,onAddCo}){
   const mc=job.workshopType==="mechanic";
   const [ct,setCt]=useState(job.clientType);const [cn,setCn]=useState(job.clientName);
@@ -311,7 +308,7 @@ function EditModal({job,services,companies,recentClients=[],onSave,onClose,onAdd
     </div>
   </div>;
 }
- 
+
 function PayModal({job,onSave,onClose}){
   const bill=job.jobBill||0,prev=job.amountPaid||0,d=Math.max(0,bill-prev);
   const [amt,setAmt]=useState(String(d));const [err,setErr]=useState("");
@@ -336,7 +333,7 @@ function PayModal({job,onSave,onClose}){
     </div>
   </div>;
 }
- 
+
 // ── START JOB MODAL ───────────────────────────────────────────────────────────
 function StartJobModal({companies,services,recentClients=[],isMC,hasRunning,onStart,onClose,onAddCo,onAddSvc}){
   const [ct,setCt]=useState("private");const [cn,setCn]=useState("");const [svc,setSvc]=useState("");const [err,setErr]=useState("");
@@ -359,7 +356,7 @@ function StartJobModal({companies,services,recentClients=[],isMC,hasRunning,onSt
     </div>
   </div>;
 }
- 
+
 // ── ACTIVE JOB CARD ───────────────────────────────────────────────────────────
 function ActiveJobCard({session,canResume,onPause,onResume,onStop}){
   const [,tick]=useState(0);
@@ -372,7 +369,7 @@ function ActiveJobCard({session,canResume,onPause,onResume,onStop}){
       <div className="job-service">{session.service}</div>
       <div className="job-meta">
         {isRun?<><span className="dot"/>Running</>:"⏸ Paused"}
-        {" · "}Started {fmtT(session.startedAt)}
+        {"   "}Started {fmtT(session.startedAt)}
       </div>
     </div>
     <div className="job-timer" style={{color:col}}>{fmtDur(el)}</div>
@@ -385,7 +382,7 @@ function ActiveJobCard({session,canResume,onPause,onResume,onStop}){
     </div>
   </div>;
 }
- 
+
 // ── COMPLETE JOB MODAL ────────────────────────────────────────────────────────
 function CompleteJobModal({session,isMC,onSave,onClose}){
   const endedAt=useRef(new Date().toISOString()).current;
@@ -444,7 +441,7 @@ function CompleteJobModal({session,isMC,onSave,onClose}){
     </div>
   </div>;
 }
- 
+
 // ── LIVE TAB ──────────────────────────────────────────────────────────────────
 function LiveTab({sessions}){
   const [,tick]=useState(0);
@@ -456,8 +453,8 @@ function LiveTab({sessions}){
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div style={{flex:1}}>
           <div style={{fontSize:14,fontWeight:700}}>{s.wtype==="carwash"?"🚿":"🔧"} {s.clientName}</div>
-          <div style={{fontSize:12,color:"var(--mt)",marginTop:2}}>{s.service} · {s.wname}</div>
-          {s.status==="completed"&&<div style={{fontSize:11,color:"var(--mt)",marginTop:2}}>Ended {fmtT(s.endedAt)} · {fmtDur(s.totalMs||0)}</div>}
+          <div style={{fontSize:12,color:"var(--mt)",marginTop:2}}>{s.service}   {s.wname}</div>
+          {s.status==="completed"&&<div style={{fontSize:11,color:"var(--mt)",marginTop:2}}>Ended {fmtT(s.endedAt)}   {fmtDur(s.totalMs||0)}</div>}
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontFamily:"Bebas Neue",fontSize:26,color:col}}>{fmtDur(el)}</div>
@@ -478,7 +475,7 @@ function LiveTab({sessions}){
     {sessions.length===0&&<div className="empty">No timer sessions yet.</div>}
   </div>;
 }
- 
+
 // ── CHARTS ────────────────────────────────────────────────────────────────────
 function RevenueChart({jobs}){
   const days=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));const ds=d.toISOString().split("T")[0];const dj=jobs.filter(j=>j.date===ds);return{day:d.toLocaleDateString("en-GB",{weekday:"short"}),cw:dj.filter(j=>j.workshopType==="carwash").reduce((s,j)=>s+(j.jobBill||0),0),mc:dj.filter(j=>j.workshopType==="mechanic").reduce((s,j)=>s+(j.profit||0),0)};});
@@ -493,7 +490,7 @@ function ServiceDonut({jobs}){
   const tt=({active,payload})=>active&&payload?.length?<div style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:"8px 12px",fontSize:12}}>{payload[0].name}: {payload[0].value}</div>:null;
   return <ResponsiveContainer width="100%" height={190}><PieChart><Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={52} outerRadius={80} paddingAngle={3}>{data.map((_,i)=><Cell key={i} fill={COLS[i%5]}/>)}</Pie><Tooltip content={tt}/></PieChart></ResponsiveContainer>;
 }
- 
+
 // ── WORKER PAGE ───────────────────────────────────────────────────────────────
 function WorkerPage({user,jobs,companies,services,sessions,isMC,onAdd,onUpd,onAddSvc,onAddCo,onStartS,onPauseS,onResumeS,onStopS,onLogout,onChangePw}){
   const [showStart,setShowStart]=useState(false);
@@ -502,13 +499,13 @@ function WorkerPage({user,jobs,companies,services,sessions,isMC,onAdd,onUpd,onAd
   const [toast,setToast]=useState("");
   const [edit,setEdit]=useState(null);
   const [sd,setSd]=useState(toDay());
- 
+
   const mySess=sessions.filter(s=>s.wid===user.id&&s.status!=="completed");
   const recentClients=[...new Set(jobs.filter(j=>j.clientType==="private"&&j.clientName).map(j=>j.clientName))].sort();
   const running=mySess.find(s=>s.status==="running");
   const mine=jobs.filter(j=>j.workerId===user.id).slice().reverse();
   const todM=mine.filter(j=>j.date===toDay());
- 
+
   const handleStartNew=async(ct,cn,svc)=>{
     if(running){
       await onPauseS({...running,status:"paused",accMs:getEl(running)});
@@ -530,7 +527,7 @@ function WorkerPage({user,jobs,companies,services,sessions,isMC,onAdd,onUpd,onAd
   };
   const ist={background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:"7px 10px",color:"var(--tx)",fontFamily:"Inter,sans-serif",fontSize:12,outline:"none"};
   const sdJ=mine.filter(j=>j.date===sd);
- 
+
   return <div style={{minHeight:"100vh"}}>
     <G/>
     <div className="top-bar">
@@ -548,7 +545,7 @@ function WorkerPage({user,jobs,companies,services,sessions,isMC,onAdd,onUpd,onAd
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:13}}>
           <div>
             <div className="stit" style={{margin:0}}>ACTIVE JOBS</div>
-            {mySess.length>0&&<div style={{fontSize:11,color:"var(--mt)",marginTop:2}}>{mySess.filter(s=>s.status==="running").length} running · {mySess.filter(s=>s.status==="paused").length} paused</div>}
+            {mySess.length>0&&<div style={{fontSize:11,color:"var(--mt)",marginTop:2}}>{mySess.filter(s=>s.status==="running").length} running   {mySess.filter(s=>s.status==="paused").length} paused</div>}
           </div>
           <button className="btn bp" style={{fontWeight:700,fontSize:13,padding:"9px 18px"}} onClick={()=>setShowStart(true)}>▶ Start New Job</button>
         </div>
@@ -573,7 +570,7 @@ function WorkerPage({user,jobs,companies,services,sessions,isMC,onAdd,onUpd,onAd
           <button className="btn bp bfull" style={{marginTop:4,padding:"11px",fontSize:13}} onClick={()=>setShowStart(true)}>▶ Start Another Job</button>
         )}
       </div>
- 
+
       {/* STATS */}
       <div className="sg">
         <div className={"sc "+(isMC?"mc":"cw")}><div className="sl">Today Jobs</div><div className={"sv "+(isMC?"sg2":"sb2")}>{todM.length}</div></div>
@@ -581,7 +578,7 @@ function WorkerPage({user,jobs,companies,services,sessions,isMC,onAdd,onUpd,onAd
         <div className="sc rd"><div className="sl">Today Debt</div><div className="sv srd">{money(todM.reduce((s,j)=>s+dueAmt(j),0))}</div></div>
         <div className="sc"><div className="sl">Total Jobs</div><div className="sv">{mine.length}</div></div>
       </div>
- 
+
       {/* COMPLETED JOBS */}
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:9,marginBottom:10}}>
         <div className="stit" style={{margin:0}}>COMPLETED JOBS</div>
@@ -616,14 +613,14 @@ function WorkerPage({user,jobs,companies,services,sessions,isMC,onAdd,onUpd,onAd
           </table>}
       </div>
     </div>
- 
+
     {toast&&<Toast msg={toast} onDone={()=>setToast("")}/>}
     {showStart&&<StartJobModal companies={companies} services={services} recentClients={recentClients} isMC={isMC} hasRunning={!!running} onStart={handleStartNew} onClose={()=>setShowStart(false)} onAddCo={onAddCo} onAddSvc={onAddSvc}/>}
     {completing&&<CompleteJobModal session={completing} isMC={isMC} onSave={handleComplete} onClose={()=>setCompleting(null)}/>}
     {edit&&<EditModal job={edit} services={services} companies={companies} recentClients={recentClients} onAddCo={onAddCo} onAddSvc={onAddSvc} onSave={j=>{onUpd(j);setEdit(null);setToast("Updated!");}} onClose={()=>setEdit(null)}/>}
   </div>;
 }
- 
+
 // ── OWNER PAGE ────────────────────────────────────────────────────────────────
 function OwnerPage({user,users,jobs,companies,cwSvc,mcSvc,sessions,onAddW,onDelW,onDelJ,onUpdJ,onAddCo,onDelCo,onAddCw,onDelCw,onAddMc,onDelMc,onLogout,onRefresh,onChangePw}){
   const [nav,setNav]=useState("dashboard");const [theme,setTheme]=useState("light");const [sideOpen,setSideOpen]=useState(false);const [showCPW,setShowCPW]=useState(false);const [resetW,setResetW]=useState(null);
@@ -712,7 +709,7 @@ function OwnerPage({user,users,jobs,companies,cwSvc,mcSvc,sessions,onAddW,onDelW
       </PH>}
       {nav==="workers"&&<PH title="👷 WORKERS">
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div style={{fontSize:13,color:"var(--mt)"}}>{workers.length} workers</div><button className="btn bp" onClick={()=>setAddW(true)}>+ Add Worker</button></div>
-        <div className="card">{workers.length===0?<div className="empty">No workers yet.</div>:workers.map(w=><div className="wr" key={w.id}><div className="wa">{w.name[0]}</div><div className="wi"><div className="wn">{w.name} <span className={"pill "+(w.type==="carwash"?"pc":"pm2")} style={{fontSize:9}}>{w.type==="carwash"?"CW":"MC"}</span></div><div className="wu">@{w.username} · {jobs.filter(j=>j.workerId===w.id).length} jobs</div></div><button className="btn bs bsm" onClick={()=>setResetW(w)}>🔑</button><button className="btn bd-btn bsm" onClick={()=>setDelW(w)}>Remove</button></div>)}</div>
+        <div className="card">{workers.length===0?<div className="empty">No workers yet.</div>:workers.map(w=><div className="wr" key={w.id}><div className="wa">{w.name[0]}</div><div className="wi"><div className="wn">{w.name} <span className={"pill "+(w.type==="carwash"?"pc":"pm2")} style={{fontSize:9}}>{w.type==="carwash"?"CW":"MC"}</span></div><div className="wu">@{w.username}   {jobs.filter(j=>j.workerId===w.id).length} jobs</div></div><button className="btn bs bsm" onClick={()=>setResetW(w)}>🔑</button><button className="btn bd-btn bsm" onClick={()=>setDelW(w)}>Remove</button></div>)}</div>
       </PH>}
       {nav==="manage"&&<PH title="⚙️ MANAGE"><ManageList icon="🏢" title="Companies" items={companies} onAdd={onAddCo} onDel={onDelCo} ph="New company…"/><ManageList icon="🚿" title="Car Wash Services" items={cwSvc} onAdd={onAddCw} onDel={onDelCw} ph="New service…"/><ManageList icon="🔧" title="Mechanic Services" items={mcSvc} onAdd={onAddMc} onDel={onDelMc} ph="New service…"/></PH>}
       {nav==="export"&&<PH title="📥 EXPORT"><div className="card">
@@ -737,9 +734,9 @@ function OwnerPage({user,users,jobs,companies,cwSvc,mcSvc,sessions,onAddW,onDelW
     {toast&&<Toast msg={toast} onDone={()=>setToast("")}/>}
   </div>;
 }
- 
+
 // ── LOGIN ─────────────────────────────────────────────────────────────────────
- 
+
 function ChangePwModal({user,onClose,onSave}){
   const [cur,setCur]=useState("");const [pw1,setPw1]=useState("");const [pw2,setPw2]=useState("");const [err,setErr]=useState("");const [ok,setOk]=useState(false);
   const save=async()=>{
@@ -777,7 +774,7 @@ function ChangePwModal({user,onClose,onSave}){
     </div>
   </div>;
 }
- 
+
 function LoginPage({users,onLogin}){
   const [un,setUn]=useState("");const [pw,setPw]=useState("");const [err,setErr]=useState("");
   const go=()=>{const u=un.trim().toLowerCase(),p=pw.trim();if(!u||!p){setErr("Enter username and password.");return;}const pool=users.length>0?users:DEF_USERS;const found=pool.find(x=>x.username.toLowerCase()===u&&x.password===p);if(found)onLogin(found);else setErr("Wrong username or password.");};
@@ -793,13 +790,13 @@ function LoginPage({users,onLogin}){
     </div>
   </div>;
 }
- 
+
 // ── APP ROOT ──────────────────────────────────────────────────────────────────
 // Local storage helpers (persists in browser even if Supabase unreachable)
 const lsGet=async(k,fb)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch{return fb;}};
 const lsSave=async(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
 const LSK={j:"as3_j",u:"as3_u",co:"as3_co",cw:"as3_cw",mc:"as3_mc",s:"as3_s"};
- 
+
 export default function App(){
   const [users,setUsers]=useState(DEF_USERS);
   const [jobs,setJobs]=useState([]);
@@ -810,7 +807,7 @@ export default function App(){
   const [me,setMe]=useState(null);
   const [ready,setReady]=useState(false);
   const [dbStatus,setDbStatus]=useState("connecting");
- 
+
   const load=async()=>{
     // Step 1: load local data immediately so UI shows fast
     const [lj,lco,lcw,lmc,ls,lu]=await Promise.all([
@@ -823,7 +820,7 @@ export default function App(){
     if(ls.length)setSessions(ls);
     if(lu.length)setUsers(lu);
     setReady(true);
- 
+
     // Step 2: sync with Supabase in background
     try{
       const [u,j,co,cw,mc,s]=await Promise.all([
@@ -844,7 +841,7 @@ export default function App(){
     }catch(e){setDbStatus("offline");}
   };
   useEffect(()=>{load();},[]);
- 
+
   // All writes go to local storage first, then Supabase
   const addJob=async j=>{
     const next=[j,...jobs];setJobs(next);lsSave(LSK.j,next);
@@ -914,7 +911,7 @@ export default function App(){
     const next=sessions.map(x=>x.id===s.id?s:x);setSessions(next);lsSave(LSK.s,next);
     sbPatch("timer_sessions","id=eq."+s.id,s2db(s));
   };
- 
+
   if(!ready)return <div style={{minHeight:"100vh",background:"#0D1117",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14}}><G/><div style={{fontFamily:"Bebas Neue,sans-serif",fontSize:32,letterSpacing:3,color:"#1DC8A0"}}>🔧 AutoShop</div><div style={{fontSize:13,color:"#6B7A99"}}>Loading your data…</div></div>;
   if(!me)return <LoginPage users={users} onLogin={setMe}/>;
   const sh={companies,onAddCo:addCo};
