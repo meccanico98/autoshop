@@ -171,17 +171,15 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
 .pay-r{border-left:3px solid var(--gn)!important}.pay-o{border-left:3px solid var(--or)!important}.pay-x{border-left:3px solid var(--rd)!important}
 .timing-chip{display:inline-flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--bd);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
 @media(max-width:768px){
-  .sidebar{transform:translateX(-240px);transition:transform .28s cubic-bezier(.4,0,.2,1);box-shadow:none;z-index:200}
-  .sidebar.open{transform:translateX(0);box-shadow:6px 0 32px rgba(0,0,0,.6)}
-  .sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:199;backdrop-filter:blur(2px)}
-  .sb-overlay.open{display:block}
+  .sidebar{display:none!important}
   .main-area{margin-left:0}
   .charts-row{grid-template-columns:1fr}
   .job-timer{font-size:26px;min-width:70px}
-  .hamburger{display:flex!important}
-  .pg-header{padding:12px 14px}
+  .pg-header{padding:10px 12px}
 }
-@media(min-width:769px){.hamburger{display:none!important}.sb-overlay{display:none!important}}
+@media(min-width:769px){
+  .mob-sidebar{display:none!important}
+}
 @media(max-width:480px){.fg{grid-template-columns:1fr}.fg3{grid-template-columns:1fr 1fr}.sg{grid-template-columns:1fr 1fr}.job-controls{flex-direction:row}}
 .hamburger{align-items:center;justify-content:center;width:38px;height:38px;border-radius:8px;background:var(--ac);color:#000;border:none;cursor:pointer;font-size:20px;flex-shrink:0;font-weight:700}`;
 
@@ -650,8 +648,8 @@ function OwnerPage({user,users,jobs,companies,cwSvc,mcSvc,sessions,onAddW,onDelW
   const PH=({title,children})=><><div className="pg-header"><div className="pg-title">{title}</div><button className="btn bs bsm" onClick={onRefresh}>↻ Refresh</button></div><div className="pg-body">{children}</div></>;
   const JTbl=({jobs:jbs,mc})=>jbs.length===0?<div className="empty">No jobs found.</div>:<table><thead><tr>{(mc?["Client","Worker","Service","From","To","Dur","Bill","Paid","Due","Parts","Profit","Status","Date",""]:["Client","Worker","Shop","Service","From","To","Dur","Bill","Paid","Due","Status","Date",""]).map(col=><th key={col}>{col}</th>)}</tr></thead><tbody>{jbs.map(j=><tr key={j.id} className={prc(j)}><td style={{fontWeight:600}}>{j.clientName}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.workerName}</td>{!mc&&<td><span className={"badge "+(j.workshopType==="carwash"?"bcw":"bmc")}>{j.workshopType==="carwash"?"🚿":"🔧"}</span></td>}<td style={{fontSize:12}}>{j.service}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.startedAt?fmtT(j.startedAt):"—"}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.endedAt?fmtT(j.endedAt):"—"}</td><td><span className="timing-chip" style={{color:"var(--ac)",fontSize:10}}>{j.durationMs?fmtDur(j.durationMs):"—"}</span></td><td className="mn" style={{color:"var(--bl)"}}>{money(j.jobBill||0)}</td><td className="mn" style={{color:"var(--gn)"}}>{money(j.amountPaid||0)}</td><td className="mn" style={{color:dueAmt(j)>0?"var(--rd)":"var(--gn)"}}>{money(dueAmt(j))}</td>{mc&&<><td className="mn" style={{color:"var(--rd)"}}>{money(j.partsCost||0)}</td><td className="mn" style={{color:(j.profit||0)>=0?"var(--gn)":"var(--rd)"}}>{money(j.profit||0)}</td></>}<td><SBadge job={j}/></td><td style={{color:"var(--mt)",fontSize:11}}>{fmtD(j.timestamp)}</td><td><button className="btn bd-btn bsm" onClick={()=>onDelJ(j.id)}>✕</button></td></tr>)}</tbody></table>;
   return <div className="layout"><G/>
-    <div className={"sb-overlay"+(sideOpen?" open":"")} onClick={()=>setSideOpen(false)}/>
-    <div className={"sidebar"+(sideOpen?" open":"")} onClick={e=>e.stopPropagation()}>
+    {sideOpen&&<div onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:199,backdropFilter:"blur(2px)"}}/>}
+    <div style={{position:"fixed",left:0,top:0,bottom:0,width:240,background:"var(--sb)",borderRight:"1px solid var(--sbbd)",display:"flex",flexDirection:"column",zIndex:200,transform:sideOpen?"translateX(0)":"translateX(-240px)",transition:"transform .25s ease"}} onClick={e=>e.stopPropagation()}>
       <div className="sb-logo"><div className="sb-brand">🔧 AutoShop</div><div className="sb-sub">Workshop Manager</div></div>
       <nav className="sb-nav">{NAV.map(n=><div key={n.id} className={"nav-item"+(nav===n.id?" active":"")} onClick={()=>{setNav(n.id);setSideOpen(false);}}><span className="nav-icon">{n.icon}</span><span style={{flex:1}}>{n.label}</span>{n.badge>0&&<span className="nav-badge">{n.badge}</span>}</div>)}</nav>
       <div className="sb-foot"><div style={{fontSize:11,color:"var(--mt)",marginBottom:8}}>👤 {user.name}</div><button className="theme-btn" onClick={toggleTheme}>{theme==="dark"?"☀️ Light Mode":"🌙 Dark Mode"}</button><button className="btn bs bsm" style={{marginTop:8,width:"100%"}} onClick={()=>setShowCPW(true)}>🔑 Change Password</button><button className="btn bs bsm" style={{marginTop:6,width:"100%"}} onClick={onLogout}>Logout</button></div>
