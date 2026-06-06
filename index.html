@@ -96,7 +96,7 @@ body{background:var(--bg);color:var(--tx);font-family:'Inter',sans-serif;min-hei
 .theme-btn{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;color:#5A6B88;border:1px solid var(--sbbd);background:transparent;transition:all .15s;width:100%}
 .theme-btn:hover{color:var(--ac);border-color:var(--ac)}
 .main-area{margin-left:240px;flex:1;min-height:100vh;background:var(--bg)}
-.pg-header{padding:14px 22px;border-bottom:1px solid var(--bd);background:var(--s1);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+
 .pg-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px}
 .pg-body{padding:20px 22px}
 .sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;margin-bottom:20px}
@@ -191,7 +191,6 @@ tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)
   .main-area{margin-left:0}
   .charts-row{grid-template-columns:1fr}
   .job-timer{font-size:26px;min-width:70px}
-  .pg-header{display:none!important}
   .pg-body{padding-top:56px}
 }
 @media(min-width:769px){
@@ -693,7 +692,7 @@ function OwnerPage({user,users,jobs,companies,cwSvc,mcSvc,sessions,onAddW,onDelW
   const wJ=()=>ew?jobs.filter(j=>j.workerId===ew):jobs;
   const OS=({gJ,lbl,mc=false})=>{const jbs=gJ();return <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8}}><button className="btn bp bsm" onClick={()=>bldPDF(jbs,lbl,mc)}>📄 PDF</button><button className="btn bxl bsm" onClick={()=>shareBlob(bldXL(jbs,lbl,mc),"AS_"+lbl.replace(/[^a-z0-9]/gi,"_")+".xlsx")}>📊 Excel</button><span style={{fontSize:11,color:"var(--mt)"}}>{jbs.length} jobs</span></div>;};
   const NAV=[{id:"dashboard",icon:"🏠",label:"Dashboard"},{id:"jobs",icon:"📋",label:"All Jobs"},{id:"carwash",icon:"🚿",label:"Car Wash"},{id:"mechanic",icon:"🔧",label:"Mechanic"},{id:"live",icon:"⏱",label:"Live"},{id:"payments",icon:"💳",label:"Payments"},{id:"debt",icon:"⚠️",label:"Debt",badge:debtJ.length},{id:"workers",icon:"👷",label:"Workers"},{id:"manage",icon:"⚙️",label:"Manage"},{id:"export",icon:"📥",label:"Export"}];
-  const PH=({title,children})=><><div className="pg-header" style={{paddingLeft:60}}><div className="pg-title">{title}</div><button className="btn bs bsm" onClick={onRefresh}>↻ Refresh</button></div><div className="pg-body">{children}</div></>;
+  const PH=({title,children})=><div className="pg-body">{children}</div>;
   const JTbl=({jobs:jbs,mc})=>jbs.length===0?<div className="empty">No jobs found.</div>:<table><thead><tr>{(mc?["Client","Worker","Service","From","To","Dur","Bill","Paid","Due","Parts","Profit","Status","Date",""]:["Client","Worker","Shop","Service","From","To","Dur","Bill","Paid","Due","Status","Date",""]).map(col=><th key={col}>{col}</th>)}</tr></thead><tbody>{jbs.map(j=><tr key={j.id} className={prc(j)}><td style={{fontWeight:600}}>{j.clientName}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.workerName}</td>{!mc&&<td><span className={"badge "+(j.workshopType==="carwash"?"bcw":"bmc")}>{j.workshopType==="carwash"?"🚿":"🔧"}</span></td>}<td style={{fontSize:12}}>{j.service}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.startedAt?fmtT(j.startedAt):"—"}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.endedAt?fmtT(j.endedAt):"—"}</td><td><span className="timing-chip" style={{color:"var(--ac)",fontSize:10}}>{j.durationMs?fmtDur(j.durationMs):"—"}</span></td><td className="mn" style={{color:"var(--bl)"}}>{money(j.jobBill||0)}</td><td className="mn" style={{color:"var(--gn)"}}>{money(j.amountPaid||0)}</td><td className="mn" style={{color:dueAmt(j)>0?"var(--rd)":"var(--gn)"}}>{money(dueAmt(j))}</td>{mc&&<><td className="mn" style={{color:"var(--rd)"}}>{money(j.partsCost||0)}</td><td className="mn" style={{color:(j.profit||0)>=0?"var(--gn)":"var(--rd)"}}>{money(j.profit||0)}</td></>}<td><SBadge job={j}/></td><td style={{color:"var(--mt)",fontSize:11}}>{fmtD(j.timestamp)}</td><td><button className="btn bd-btn bsm" onClick={()=>onDelJ(j.id)}>✕</button></td></tr>)}</tbody></table>;
   return <div className="layout"><G/>
     {/* Hamburger - always visible, fixed position, cannot be hidden */}
