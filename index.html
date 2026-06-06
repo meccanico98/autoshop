@@ -704,12 +704,7 @@ function OwnerPage({user,users,jobs,companies,cwSvc,mcSvc,sessions,onAddW,onDelW
       <div className="sb-foot"><div style={{fontSize:11,color:"var(--mt)",marginBottom:8}}>👤 {user.name}</div><button className="theme-btn" onClick={toggleTheme}>{theme==="dark"?"☀️ Light Mode":"🌙 Dark Mode"}</button><button className="btn bs bsm" style={{marginTop:8,width:"100%"}} onClick={()=>setShowCPW(true)}>🔑 Change Password</button><button className="btn bs bsm" style={{marginTop:6,width:"100%"}} onClick={onLogout}>Logout</button></div>
     </div>
     <div className="main-area">
-      {window.innerWidth<=768&&<div style={{position:"sticky",top:0,zIndex:101,background:"#0A0F1C",borderBottom:"1px solid #141C2E",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",msOverflowStyle:"none"}}>
-        {NAV.map(n=><button key={n.id} onClick={()=>setNav(n.id)} style={{flexShrink:0,padding:"12px 14px",background:"transparent",border:"none",borderBottom:nav===n.id?"3px solid #1DC8A0":"3px solid transparent",color:nav===n.id?"#1DC8A0":"#5A6B88",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:5,WebkitTapHighlightColor:"transparent"}}>
-          <span>{n.icon}</span><span>{n.label}</span>
-          {n.badge>0&&<span style={{background:"#FF6B6B",color:"#fff",borderRadius:20,padding:"1px 5px",fontSize:10,minWidth:16,textAlign:"center"}}>{n.badge}</span>}
-        </button>)}
-      </div>}
+
       {nav==="dashboard"&&<PH title="📊 DASHBOARD">
         <div className="sg">
           <div className="sc"><div className="sl">Total Jobs</div><div className="sv sa">{jobs.length}</div></div>
