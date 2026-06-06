@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AutoShop</title>
+  <meta name="theme-color" content="#1DC8A0"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="AutoShop"/>
+  <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js" crossorigin></script>
+  <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.min.js" crossorigin onerror="window.Recharts={}"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.3/babel.min.js" crossorigin></script>
+</head>
+<body style="margin:0">
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } = (typeof Recharts !== 'undefined') ? Recharts : {};
+
+const SBU="https://kxpqgomkuftwdrvuoiyr.supabase.co";
+const SBK="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4cHFnb21rdWZ0d2RydnVvaXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NjMyMjksImV4cCI6MjA5NjEzOTIyOX0.1x9379Q-0oC9ZEZAx7oKdUIyBS4bcsi7MpFJUUo7RSU";
+const SH={"Content-Type":"application/json",apikey:SBK,Authorization:`Bearer ${SBK}`};
+const sbGet=async(t,q="")=>{try{const r=await fetch(`${SBU}/rest/v1/${t}?${q}`,{headers:SH});return r.ok?await r.json():[];}catch{return[];}};
+const sbPost=async(t,d)=>{try{const r=await fetch(`${SBU}/rest/v1/${t}`,{method:"POST",headers:{...SH,"Prefer":"return=representation"},body:JSON.stringify(d)});const j=await r.json();return Array.isArray(j)?j[0]:j;}catch{return null;}};
+const sbPatch=async(t,f,d)=>{try{const r=await fetch(`${SBU}/rest/v1/${t}?${f}`,{method:"PATCH",headers:{...SH,"Prefer":"return=representation"},body:JSON.stringify(d)});const j=await r.json();return Array.isArray(j)?j[0]:j;}catch{return null;}};
+const sbDel=async(t,f)=>{try{await fetch(`${SBU}/rest/v1/${t}?${f}`,{method:"DELETE",headers:SH});}catch{}};
+
+const j2db=j=>({id:j.id,worker_id:j.workerId||"",worker_name:j.workerName||"",workshop_type:j.workshopType||"",client_type:j.clientType||"private",client_name:j.clientName||"",service:j.service||"",job_bill:j.jobBill||0,amount_paid:j.amountPaid||0,parts_cost:j.partsCost||0,profit:j.profit||0,due_amount:j.dueAmount||0,payment_status:j.paymentStatus||"unpaid",payment_method:j.paymentMethod||"cash",note:j.note||"",date:j.date||toDay(),started_at:j.startedAt||null,ended_at:j.endedAt||null,duration_ms:j.durationMs||0,fattura:j.fattura||false});
+const db2j=r=>({id:r.id,workerId:r.worker_id,workerName:r.worker_name,workshopType:r.workshop_type,clientType:r.client_type,clientName:r.client_name,service:r.service,jobBill:+r.job_bill||0,amount:+r.job_bill||0,amountPaid:+r.amount_paid||0,partsCost:+r.parts_cost||0,profit:+r.profit||0,dueAmount:+r.due_amount||0,paymentStatus:r.payment_status,paymentMethod:r.payment_method||"cash",note:r.note||"",date:r.date,timestamp:r.created_at,startedAt:r.started_at,endedAt:r.ended_at,durationMs:+r.duration_ms||0,fattura:r.fattura||false});
+const s2db=s=>({id:s.id,wid:s.wid,wname:s.wname,wtype:s.wtype,client_type:s.clientType,client_name:s.clientName,service:s.service,status:s.status,started_at:s.startedAt,resume_at:s.resumeAt,acc_ms:s.accMs,total_ms:s.totalMs,ended_at:s.endedAt});
+const db2s=r=>({id:r.id,wid:r.wid,wname:r.wname,wtype:r.wtype,clientType:r.client_type,clientName:r.client_name,service:r.service,status:r.status,startedAt:r.started_at,resumeAt:r.resume_at,accMs:+r.acc_ms||0,totalMs:r.total_ms!=null?+r.total_ms:null,endedAt:r.ended_at});
+
+const DEF_USERS=[]; // Credentials stored in Supabase only
+const PMS=[{id:"cash",icon:"💵",label:"Cash"},{id:"card",icon:"💳",label:"Card"}];
+const STATUS={paid:{label:"✅ Paid",color:"#1DC8A0",bg:"rgba(29,200,160,.14)"},partial:{label:"🟠 Partial",color:"#FFA940",bg:"rgba(255,169,64,.14)"},unpaid:{label:"🔴 Unpaid",color:"#FF6B6B",bg:"rgba(255,107,107,.14)"}};
+
+function toDay(){return new Date().toISOString().split("T")[0];}
+const money=n=>Number(n||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtD=ts=>ts?new Date(ts).toLocaleDateString("en-GB",{day:"2-digit",month:"short",year:"numeric"}):"—";
+const fmtT=ts=>ts?new Date(ts).toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}):"";
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2);
+const pmLabel=id=>{const m=PMS.find(x=>x.id===id)||PMS[0];return m.icon+" "+m.label;};
+const pSt=j=>{const b=j.jobBill||j.amount||0,p=j.amountPaid??b;return p>=b?"paid":p<=0?"unpaid":"partial";};
+const dueAmt=j=>Math.max(0,(j.jobBill||j.amount||0)-(j.amountPaid??(j.jobBill||j.amount||0)));
+const getEl=s=>{if(!s)return 0;if(s.status==="running")return s.accMs+(Date.now()-new Date(s.resumeAt).getTime());if(s.status==="paused")return s.accMs;return s.totalMs||0;};
+const fmtDur=ms=>{const t=Math.floor(Math.max(0,ms)/1000),h=Math.floor(t/3600),m=Math.floor((t%3600)/60),s=t%60;return h>0?`${h}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`:`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;};
+const prc=j=>pSt(j)==="paid"?"pay-r":pSt(j)==="partial"?"pay-o":"pay-x";
+
+function openPDF(html,lbl){
+  const ex=document.getElementById("__pov");if(ex)ex.remove();
+  const p=new DOMParser(),doc=p.parseFromString(html,"text/html");
+  const body=doc.body.innerHTML,style=doc.head.querySelector("style")?.textContent||"";
+  const ov=document.createElement("div");ov.id="__pov";
+  ov.style.cssText="position:fixed;inset:0;z-index:9999;background:#fff;overflow:auto;font-family:Arial,sans-serif;";
+  ov.innerHTML=`<style>${style}
+    @media print{body>*:not(#__pov){display:none!important}#__pov{position:static!important;overflow:visible!important}#__ptb{display:none!important}.no-print{display:none!important}}</style>
+  <div id="__ptb" style="position:sticky;top:0;background:#1DC8A0;padding:10px 16px;display:flex;gap:10px;align-items:center;z-index:1;font-family:Arial;box-shadow:0 2px 8px rgba(0,0,0,.15)">
+    <span style="flex:1;font-weight:bold;color:#000;font-size:13px">📄 ${lbl}</span>
+    <button onclick="window.print()" style="background:#000;color:#fff;border:none;padding:9px 16px;border-radius:7px;font-size:13px;font-weight:bold;cursor:pointer">🖨 Print / Save PDF</button>
+    <button onclick="document.getElementById('__pov').remove()" style="background:rgba(0,0,0,.12);border:none;padding:9px 12px;border-radius:7px;cursor:pointer;font-size:16px;line-height:1;font-weight:bold">✕</button>
+  </div>
+  <div style="padding:20px 24px">${body}</div>`;
+  document.body.appendChild(ov);
+}
+function pdfDoc(title,sub,heads,rows,totals){const srs=totals.map(([k,v])=>`<tr class="tot"><td colspan="4">${k}</td><td colspan="${heads.length-4}" style="text-align:right">${v}</td></tr>`).join("");return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title><style>*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:12px;padding:20px;color:#111}h1{font-size:20px;color:#1DC8A0}.hdr{text-align:center;border-bottom:3px solid #1DC8A0;padding-bottom:12px;margin-bottom:14px}table{width:100%;border-collapse:collapse}th{background:#1DC8A0;color:#000;padding:7px 8px;text-align:left;font-size:10px;text-transform:uppercase}td{padding:7px 8px;border-bottom:1px solid #eee;font-size:11px}tr:nth-child(even)td{background:#fafafa}tr.tot td{background:#f0fdf9;border-top:2px solid #1DC8A0;font-weight:bold}.paid{color:#1DC8A0}.partial{color:#e67e22}.unpaid{color:#c0392b}.ft{text-align:center;font-size:10px;color:#aaa;margin-top:12px}@media print{body{padding:0}}</style></head><body><div class="hdr"><h1>🔧 AutoShop</h1><p style="color:#666;font-size:11px">${sub}</p></div><table><thead><tr>${heads.map(col=>`<th>${col}</th>`).join("")}</tr></thead><tbody>${rows}${srs}</tbody></table><div class="ft">Generated ${new Date().toLocaleString()}</div></body></html>`;}
+function bldPDF(jobs,lbl,mc){const h=mc?["#","Client","Service","From","To","Duration","Bill","Paid","Due","Parts","Profit","Status"]:["#","Client","Service","From","To","Duration","Bill","Paid","Due","Status"];const rows=jobs.map((j,i)=>{const st=pSt(j);return`<tr><td>${i+1}</td><td>${j.clientName}</td><td>${j.service}</td><td>${j.startedAt?fmtT(j.startedAt):"—"}</td><td>${j.endedAt?fmtT(j.endedAt):"—"}</td><td>${j.durationMs?fmtDur(j.durationMs):"—"}</td><td style="text-align:right">${money(j.jobBill||0)}</td><td style="text-align:right">${money(j.amountPaid||0)}</td><td style="text-align:right;color:#c0392b">${money(dueAmt(j))}</td>${mc?`<td>${money(j.partsCost||0)}</td><td style="color:#1DC8A0">${money(j.profit||0)}</td>`:""}<td class="${st}">${STATUS[st].label}</td></tr>`;}).join("");const t=jobs.reduce((s,j)=>s+(j.jobBill||0),0),p=jobs.reduce((s,j)=>s+(j.amountPaid||0),0);openPDF(pdfDoc(lbl,lbl,h,rows,[["TOTAL BILL",money(t)+" SAR"],["TOTAL PAID",money(p)+" SAR"],["DUE",money(t-p)+" SAR"]]),lbl);}
+function makeXL(name,rows){const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=rows[0]?.map((_,i)=>({wch:Math.min(28,Math.max(8,...rows.map(r=>String(r[i]||"").length)))}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,name);const buf=XLSX.write(wb,{bookType:"xlsx",type:"array"});return new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});}
+async function shareBlob(blob,fname){
+  // Try native share (mobile)
+  const file=new File([blob],fname,{type:blob.type});
+  if(navigator.share&&navigator.canShare?.({files:[file]})){try{await navigator.share({files:[file],title:fname});return;}catch{}}
+  // Use FileReader data URL — works in sandboxed iframes
+  const reader=new FileReader();
+  reader.onload=()=>{const a=document.createElement("a");a.href=reader.result;a.download=fname;document.body.appendChild(a);a.click();document.body.removeChild(a);};
+  reader.readAsDataURL(blob);
+}
+function bldXL(jobs,lbl,mc){const h=mc?["#","Client","Service","From","To","Duration","Bill","Paid","Due","Parts","Profit","Status","Date"]:["#","Client","Service","From","To","Duration","Bill","Paid","Due","Status","Date"];return makeXL(lbl,[["AutoShop — "+lbl],[],h,...jobs.map((j,i)=>[i+1,j.clientName,j.service,j.startedAt?fmtT(j.startedAt):"—",j.endedAt?fmtT(j.endedAt):"—",j.durationMs?fmtDur(j.durationMs):"—",j.jobBill||0,j.amountPaid||0,dueAmt(j),...(mc?[j.partsCost||0,j.profit||0]:[]),STATUS[pSt(j)].label,fmtD(j.timestamp)])]);}
+
+const CSS=`@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#0D1117;--s1:#161C2B;--s2:#1C2333;--bd:#252E42;--ac:#1DC8A0;--ac2:#17A885;--rd:#FF6B6B;--gn:#1DC8A0;--bl:#4F9EF8;--or:#FFA940;--tx:#E6EAF3;--mt:#6B7A99;--sb:#0A0F1C;--sbbd:#141C2E;--r:10px}
+[data-theme="light"]{--bg:#F0F4F8;--s1:#fff;--s2:#F8FAFC;--bd:#E2E8F0;--tx:#1A2235;--mt:#64748B}
+body{background:var(--bg);color:var(--tx);font-family:'Inter',sans-serif;min-height:100vh}
+.layout{display:flex;min-height:100vh}
+.sidebar{width:240px;min-height:100vh;background:var(--sb);border-right:1px solid var(--sbbd);position:fixed;left:0;top:0;bottom:0;display:flex;flex-direction:column;z-index:100}
+.sb-logo{padding:20px 18px 16px;border-bottom:1px solid var(--sbbd)}
+.sb-brand{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;color:var(--ac)}
+.sb-sub{font-size:10px;color:#3D4F6B;letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
+.sb-nav{flex:1;padding:10px 8px;overflow-y:auto}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;color:#5A6B88;transition:all .15s;margin-bottom:2px}
+.nav-item:hover{background:rgba(29,200,160,.08);color:var(--tx)}.nav-item.active{background:rgba(29,200,160,.15);color:var(--ac)}
+.nav-icon{font-size:15px;width:20px;text-align:center}
+.nav-badge{margin-left:auto;background:var(--rd);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:20px;min-width:18px;text-align:center}
+.sb-foot{padding:14px 16px;border-top:1px solid var(--sbbd)}
+.theme-btn{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;color:#5A6B88;border:1px solid var(--sbbd);background:transparent;transition:all .15s;width:100%}
+.theme-btn:hover{color:var(--ac);border-color:var(--ac)}
+.main-area{margin-left:240px;flex:1;min-height:100vh;background:var(--bg)}
+.pg-header{padding:14px 22px;border-bottom:1px solid var(--bd);background:var(--s1);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.pg-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px}
+.pg-body{padding:20px 22px}
+.sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;margin-bottom:20px}
+.sc{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:15px;position:relative;overflow:hidden}
+.sc::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--ac)}
+.sc.cw::before{background:var(--bl)}.sc.mc::before{background:var(--gn)}.sc.rd::before{background:var(--rd)}
+.sl{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--mt);margin-bottom:5px}
+.sv{font-family:'Bebas Neue',sans-serif;font-size:27px;letter-spacing:1px;line-height:1}
+.sa{color:var(--ac)}.sg2{color:var(--gn)}.sb2{color:var(--bl)}.srd{color:var(--rd)}.sor{color:var(--or)}
+.charts-row{display:grid;grid-template-columns:3fr 2fr;gap:16px;margin-bottom:20px}
+.chart-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:18px}
+.chart-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:14px}
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.ct{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--mt);margin-bottom:13px}
+.f{margin-bottom:12px}
+.f label{display:block;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--mt);margin-bottom:5px}
+.f input,.f select{width:100%;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;color:var(--tx);font-family:'Inter',sans-serif;font-size:13px;outline:none;transition:border-color .15s}
+.f input:focus,.f select:focus{border-color:var(--ac)}.f select option{background:var(--s2)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 16px;border-radius:8px;border:none;cursor:pointer;font-family:'Inter',sans-serif;font-size:13px;font-weight:600;transition:all .15s}
+.bp{background:var(--ac);color:#000}.bp:hover{background:var(--ac2)}
+.bs{background:var(--s2);color:var(--tx);border:1px solid var(--bd)}.bs:hover{border-color:var(--ac)}
+.bd-btn{background:rgba(255,107,107,.1);color:var(--rd);border:1px solid rgba(255,107,107,.2)}
+.bxl{background:#1a7a4a;color:#fff}.bor{background:rgba(255,169,64,.1);color:var(--or);border:1px solid rgba(255,169,64,.25)}
+.bsm{padding:5px 10px;font-size:12px}.bfull{width:100%}
+.pills{display:flex;flex-wrap:wrap;gap:7px;margin-top:4px}
+.pt{padding:7px 12px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:500;user-select:none;transition:all .15s;border:1px solid var(--bd);background:var(--s2);color:var(--mt)}
+.pt:hover{border-color:var(--ac);color:var(--tx)}
+.on{background:var(--ac)!important;color:#000!important;border-color:var(--ac)!important}
+.ob{background:var(--bl)!important;color:#fff!important;border-color:var(--bl)!important}
+.og{background:var(--gn)!important;color:#000!important;border-color:var(--gn)!important}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--mt);padding:0 10px 10px;border-bottom:1px solid var(--bd)}
+td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;vertical-align:middle}
+tr:last-child td{border-bottom:none}tr:hover td{background:rgba(255,255,255,.02)}
+.mn{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:.5px}
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600}
+.bcw{background:rgba(79,158,248,.15);color:var(--bl)}.bmc{background:rgba(29,200,160,.15);color:var(--gn)}
+.tbl-wrap{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden}
+.filters{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.filters input,.filters select{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:7px 10px;color:var(--tx);font-family:'Inter',sans-serif;font-size:12px;outline:none}
+.filters input:focus,.filters select:focus{border-color:var(--ac)}.filters select option{background:var(--s2)}
+.err{background:rgba(255,107,107,.08);border:1px solid rgba(255,107,107,.2);color:var(--rd);border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.empty{text-align:center;padding:36px;color:var(--mt);font-size:13px}
+.toast{position:fixed;bottom:20px;right:20px;background:var(--ac);color:#000;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;z-index:9999;animation:pop .25s ease}
+@keyframes pop{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+.mbg{position:fixed;inset:0;background:rgba(0,0,0,.78);display:flex;align-items:center;justify-content:center;z-index:200;padding:14px;backdrop-filter:blur(4px)}
+.modal{background:var(--s1);border:1px solid var(--bd);border-radius:14px;padding:24px;width:500px;max-width:100%;max-height:92vh;overflow-y:auto}
+.mt-t{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;margin-bottom:14px}
+.wr{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--bd)}.wr:last-child{border-bottom:none}
+.wa{width:34px;height:34px;border-radius:50%;background:rgba(29,200,160,.12);display:flex;align-items:center;justify-content:center;font-family:'Bebas Neue';font-size:14px;color:var(--ac);flex-shrink:0}
+.wi{flex:1}.wn{font-size:13px;font-weight:600}.wu{font-size:11px;color:var(--mt);margin-top:2px}
+.ms{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:13px;margin-bottom:11px}
+.ms-t{font-size:13px;font-weight:600;margin-bottom:9px}
+.ir{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.04)}.ir:last-child{border-bottom:none}
+.iname{flex:1;font-size:13px}.ar{display:flex;gap:7px;margin-top:8px}
+.ar input{flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;color:var(--tx);font-family:'Inter',sans-serif;font-size:12px;outline:none}
+.ar input:focus{border-color:var(--ac)}
+.pbox{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:6px;display:flex;gap:13px;flex-wrap:wrap}
+.pi .lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--mt);margin-bottom:2px}
+.pi .val{font-family:'Bebas Neue',sans-serif;font-size:19px;letter-spacing:.5px}
+.stit{font-family:'Bebas Neue',sans-serif;font-size:17px;letter-spacing:2px;margin-bottom:11px}
+.div{height:1px;background:var(--bd);margin:14px 0}
+.top-bar{height:52px;background:var(--s1);border-bottom:1px solid var(--bd);padding:0 18px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.brand-sm{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;color:var(--ac)}
+.pill{font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;padding:3px 9px;border-radius:20px}
+.po{background:rgba(255,107,107,.15);color:var(--rd)}.pc{background:rgba(79,158,248,.15);color:var(--bl)}.pm2{background:rgba(29,200,160,.15);color:var(--gn)}
+.w-main{padding:18px 16px;max-width:920px;margin:0 auto}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.lw{min-height:100vh;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 0%,rgba(29,200,160,.1) 0%,transparent 60%),var(--bg)}
+.lc{background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:44px 36px;width:100%;max-width:380px}
+.logo-big{font-family:'Bebas Neue',sans-serif;font-size:38px;letter-spacing:3px;color:var(--ac);line-height:1}
+.logo-sub{color:var(--mt);font-size:11px;margin-top:3px;margin-bottom:28px;letter-spacing:1.5px;text-transform:uppercase}
+.hint-box{margin-top:16px;background:rgba(29,200,160,.05);border:1px solid rgba(29,200,160,.12);border-radius:8px;padding:12px;font-size:12px;color:var(--mt);line-height:2.4}
+.job-card{background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;transition:border-color .15s}
+.job-card.running{border-color:var(--gn);background:rgba(29,200,160,.04)}
+.job-card.paused{border-color:var(--or);background:rgba(255,169,64,.04)}
+.job-info{flex:1;min-width:0}
+.job-client{font-size:15px;font-weight:700;margin-bottom:2px}
+.job-service{font-size:12px;color:var(--mt)}
+.job-meta{font-size:11px;color:var(--mt);margin-top:3px}
+.job-timer{font-family:'Bebas Neue',sans-serif;font-size:34px;letter-spacing:2px;line-height:1;min-width:90px;text-align:center}
+.job-controls{display:flex;flex-direction:column;gap:7px;flex-shrink:0}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--gn);display:inline-block;animation:blink 1s infinite;margin-right:4px}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.start-zone{border:2px dashed var(--bd);border-radius:12px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:16px}
+.start-zone:hover{border-color:var(--ac);background:rgba(29,200,160,.04)}
+.pay-r{border-left:3px solid var(--gn)!important}.pay-o{border-left:3px solid var(--or)!important}.pay-x{border-left:3px solid var(--rd)!important}
+.timing-chip{display:inline-flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--bd);border-radius:20px;padding:3px 9px;font-size:11px;font-weight:600}
+@media(max-width:768px){
+  .sidebar{display:none!important}
+  .main-area{margin-left:0}
+  .charts-row{grid-template-columns:1fr}
+  .job-timer{font-size:26px;min-width:70px}
+  .pg-header{padding:10px 12px}
+}
+@media(min-width:769px){
+  .mob-sidebar{display:none!important}
+}
+@media(max-width:480px){.fg{grid-template-columns:1fr}.fg3{grid-template-columns:1fr 1fr}.sg{grid-template-columns:1fr 1fr}.job-controls{flex-direction:row}}
+.hamburger{align-items:center;justify-content:center;width:38px;height:38px;border-radius:8px;background:var(--ac);color:#000;border:none;cursor:pointer;font-size:20px;flex-shrink:0;font-weight:700}`;
+
+const G=()=><style>{CSS}</style>;
+function Toast({msg,onDone}){useEffect(()=>{const t=setTimeout(onDone,2400);return()=>clearTimeout(t);},[]);return <div className="toast">✓ {msg}</div>;}
+const SBadge=({job})=>{const s=STATUS[pSt(job)];return <span style={{display:"inline-flex",alignItems:"center",padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,background:s.bg,color:s.color}}>{s.label}</span>;};
+
+function ClientPicker({type,setType,name,setName,companies,recentClients=[],onAddCo}){
+  const [add,setAdd]=useState(false);const [val,setVal]=useState("");
+  const doAdd=()=>{const n=val.trim();if(n){onAddCo(n);setName(n);setVal("");setAdd(false);}};
+  return <>
+    <div className="f"><label>Client Type</label><div className="pills">
+      <div className={"pt"+(type==="private"?" on":"")} onClick={()=>{setType("private");setName("");}}>👤 Private</div>
+      <div className={"pt"+(type==="company"?" on":"")} onClick={()=>{setType("company");setName("");}}>🏢 Company</div>
+    </div></div>
+    {type==="private"&&<div className="f">
+      <label>Client Name{name&&<span style={{color:"var(--ac)",textTransform:"none",letterSpacing:0,fontWeight:400}}> ✓ {name}</span>}</label>
+      {recentClients.length>0&&<><div style={{fontSize:10,color:"var(--mt)",fontWeight:600,textTransform:"uppercase",letterSpacing:1,marginBottom:5,marginTop:2}}>Recent</div>
+      <div className="pills" style={{marginBottom:8}}>
+        {recentClients.map(cl=><div key={cl} className={"pt"+(name===cl?" on":"")} onClick={()=>setName(cl)}>{cl}</div>)}
+      </div></>}
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder={recentClients.length>0?"Or type new name…":"Type client name…"} style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:"10px 12px",color:"var(--tx)",fontFamily:"Inter,sans-serif",fontSize:13,outline:"none",width:"100%"}}/>
+    </div>}
+    {type==="company"&&<div className="f">
+      <label>Company{name&&<span style={{color:"var(--ac)",textTransform:"none",letterSpacing:0,fontWeight:400}}> ✓ {name}</span>}</label>
+      <div className="pills">
+        {companies.map(c=><div key={c} className={"pt"+(name===c?" on":"")} onClick={()=>setName(c)}>{c}</div>)}
+        <div className={"pt"+(add?" ob":"")} onClick={()=>setAdd(!add)} style={{borderStyle:"dashed"}}>＋ New</div>
+      </div>
+      {add&&<div className="ar" style={{marginTop:8}}>
+        <input placeholder="Company name…" value={val} onChange={e=>setVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doAdd()}/>
+        <button className="btn bp bsm" onClick={doAdd}>Add</button>
+        <button className="btn bs bsm" onClick={()=>setAdd(false)}>✕</button>
+      </div>}
+    </div>}
+  </>;
+}
+
+function SvcPicker({services,sel,onSel,onAdd,cls}){
+  const [add,setAdd]=useState(false);const [val,setVal]=useState("");
+  const doAdd=()=>{const n=val.trim();if(n){onAdd(n);onSel(n);setVal("");setAdd(false);}};
+  const col=cls==="ob"?"var(--bl)":cls==="og"?"var(--gn)":"var(--ac)";
+  return <div className="f">
+    <label>Service{sel&&<span style={{color:col,textTransform:"none",letterSpacing:0,fontWeight:400}}> ✓ {sel}</span>}</label>
+    <div className="pills">
+      {services.map(s=><div key={s} className={"pt"+(sel===s?" "+cls:"")} onClick={()=>onSel(s)}>{s}</div>)}
+      <div className={"pt"+(add?" ob":"")} onClick={()=>setAdd(!add)} style={{borderStyle:"dashed"}}>＋ Add</div>
+    </div>
+    {add&&<div className="ar" style={{marginTop:8}}>
+      <input placeholder="New service…" value={val} onChange={e=>setVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doAdd()}/>
+      <button className="btn bp bsm" onClick={doAdd}>Add</button>
+      <button className="btn bs bsm" onClick={()=>setAdd(false)}>✕</button>
+    </div>}
+  </div>;
+}
+
+
+const FatturaPicker=({val,onChange})=><div className="f">
+  <label>Fattura <span style={{fontSize:10,color:"var(--mt)",textTransform:"none",letterSpacing:0,fontWeight:400}}>(Invoice required?)</span></label>
+  <div className="pills">
+    <div className={"pt"+(val===true?" on":"")} style={val===true?{background:"rgba(29,200,160,.2)",borderColor:"var(--ac)",color:"var(--ac)"}:{}} onClick={()=>onChange(true)}>✅ Yes — Issue Invoice</div>
+    <div className={"pt"+(val===false?" on":"")} style={val===false?{background:"rgba(107,122,153,.15)",borderColor:"var(--mt)",color:"var(--mt)"}:{}} onClick={()=>onChange(false)}>❌ No Invoice</div>
+  </div>
+</div>;
+
+const PmPicker=({val,onChange})=><div className="f"><label>Payment Method (How they paid)</label><div className="pills">{PMS.map(m=><div key={m.id} className={"pt"+(val===m.id?" on":"")} onClick={()=>onChange(m.id)}>{m.icon} {m.label}</div>)}</div></div>;
+
+function PayBox({bill,paid}){
+  const b=parseFloat(bill)||0,p=parseFloat(paid)||0,d=Math.max(0,b-p);
+  const s=b>0?(p>=b?"paid":p<=0?"unpaid":"partial"):null;
+  if(!b&&!p)return null;
+  return <div className="pbox">
+    <div className="pi"><div className="lbl">Bill</div><div className="val" style={{color:"var(--bl)"}}>{money(b)}</div></div>
+    <div className="pi"><div className="lbl">Paid</div><div className="val" style={{color:"var(--gn)"}}>{money(p)}</div></div>
+    <div className="pi"><div className="lbl">Due</div><div className="val" style={{color:d>0?"var(--rd)":"var(--gn)"}}>{money(d)}</div></div>
+    {s&&<div className="pi"><div className="lbl">Status</div><div style={{marginTop:4}}><span style={{display:"inline-block",padding:"3px 9px",borderRadius:20,fontSize:11,fontWeight:700,background:STATUS[s].bg,color:STATUS[s].color}}>{STATUS[s].label}</span></div></div>}
+  </div>;
+}
+
+function ManageList({icon,title,items,onAdd,onDel,ph}){
+  const [val,setVal]=useState("");
+  return <div className="ms">
+    <div className="ms-t">{icon} {title} <span style={{color:"var(--mt)",fontWeight:400,fontSize:11}}>({items.length})</span></div>
+    {items.map(x=><div key={x} className="ir"><span className="iname">{x}</span><button className="btn bd-btn bsm" onClick={()=>onDel(x)}>✕</button></div>)}
+    <div className="ar">
+      <input placeholder={ph} value={val} onChange={e=>setVal(e.target.value)} onKeyDown={e=>e.key==="Enter"&&val.trim()&&(onAdd(val.trim()),setVal(""))}/>
+      <button className="btn bp bsm" onClick={()=>{if(val.trim()){onAdd(val.trim());setVal("");}}}>＋</button>
+    </div>
+  </div>;
+}
+
+function EditModal({job,services,companies,recentClients=[],onSave,onClose,onAddSvc,onAddCo}){
+  const mc=job.workshopType==="mechanic";
+  const [ct,setCt]=useState(job.clientType);const [cn,setCn]=useState(job.clientName);
+  const [svc,setSvc]=useState(job.service);const [bill,setBill]=useState(String(job.jobBill||0));
+  const [paid,setPaid]=useState(String(job.amountPaid||0));const [prt,setPrt]=useState(String(job.partsCost||0));
+  const [pm,setPm]=useState(job.paymentMethod||"cash");const [fat,setFat]=useState(job.fattura||false);const [nte,setNte]=useState(job.note||"");
+  const [err,setErr]=useState("");
+  const save=()=>{
+    if(!cn.trim()){setErr(ct==="private"?"Enter name.":"Select company.");return;}
+    if(!svc){setErr("Select service.");return;}
+    const b=parseFloat(bill)||0;if(b<=0){setErr("Enter job bill.");return;}
+    const p=parseFloat(paid)||0,pc=parseFloat(prt)||0,d=Math.max(0,b-p),st=p>=b?"paid":p<=0?"unpaid":"partial";
+    onSave({...job,clientType:ct,clientName:cn.trim(),service:svc,note:nte.trim(),jobBill:b,amountPaid:p,dueAmount:d,paymentStatus:st,amount:b,paymentMethod:pm,fattura:fat,...(mc?{partsCost:pc,profit:p-pc}:{})});
+  };
+  return <div className="mbg" onClick={onClose}>
+    <div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="mt-t">✏️ EDIT JOB</div>
+      {err&&<div className="err">{err}</div>}
+      <ClientPicker type={ct} setType={setCt} name={cn} setName={setCn} companies={companies} recentClients={recentClients} onAddCo={onAddCo}/>
+      <SvcPicker services={services} sel={svc} onSel={setSvc} onAdd={onAddSvc} cls={mc?"og":"ob"}/>
+      <div className={mc?"fg3":"fg"} style={{marginTop:4}}>
+        <div className="f"><label>Job Bill (SAR)</label><input type="number" inputMode="decimal" value={bill} onChange={e=>setBill(e.target.value)}/></div>
+        <div className="f"><label>Amount Paid (SAR)</label><input type="number" inputMode="decimal" value={paid} onChange={e=>setPaid(e.target.value)}/></div>
+        {mc&&<div className="f"><label>Parts Cost (SAR)</label><input type="number" inputMode="decimal" value={prt} onChange={e=>setPrt(e.target.value)}/></div>}
+      </div>
+      <PayBox bill={bill} paid={paid}/>
+      <PmPicker val={pm} onChange={setPm}/>
+      <FatturaPicker val={fat} onChange={setFat}/>
+      <div className="f"><label>Note</label><input value={nte} onChange={e=>setNte(e.target.value)} placeholder="Optional…"/></div>
+      <div style={{display:"flex",gap:8,marginTop:12}}>
+        <button className="btn bp" style={{flex:1}} onClick={save}>💾 Save</button>
+        <button className="btn bs" onClick={onClose}>Cancel</button>
+      </div>
+    </div>
+  </div>;
+}
+
+function PayModal({job,onSave,onClose}){
+  const bill=job.jobBill||0,prev=job.amountPaid||0,d=Math.max(0,bill-prev);
+  const [amt,setAmt]=useState(String(d));const [err,setErr]=useState("");
+  const save=()=>{const a=parseFloat(amt);if(isNaN(a)||a<=0){setErr("Enter valid amount.");return;}const np=Math.min(bill,prev+a),nd=Math.max(0,bill-np),st=np>=bill?"paid":"partial";onSave({...job,amountPaid:np,dueAmount:nd,paymentStatus:st,...(job.workshopType==="mechanic"?{profit:np-(job.partsCost||0)}:{})});};
+  return <div className="mbg" onClick={onClose}>
+    <div className="modal" style={{width:340}} onClick={e=>e.stopPropagation()}>
+      <div className="mt-t">💳 RECORD PAYMENT</div>
+      <div style={{background:"var(--s2)",borderRadius:8,padding:12,marginBottom:12}}>
+        <div style={{fontWeight:700,marginBottom:6,fontSize:14}}>{job.clientName} — {job.service}</div>
+        <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+          {[["Bill",bill,"var(--bl)"],["Paid",prev,"var(--gn)"],["Due",d,"var(--rd)"]].map(([lbl,v,col])=>(
+            <div key={lbl}><div style={{fontSize:10,color:"var(--mt)",fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>{lbl}</div><div style={{fontFamily:"Bebas Neue",fontSize:20,color:col}}>{money(v)}</div></div>
+          ))}
+        </div>
+      </div>
+      {err&&<div className="err">{err}</div>}
+      <div className="f"><label>Payment Amount (SAR)</label><input type="number" inputMode="decimal" value={amt} onChange={e=>setAmt(e.target.value)} autoFocus/></div>
+      <div style={{display:"flex",gap:8}}>
+        <button className="btn bp" style={{flex:1}} onClick={save}>✓ Record</button>
+        <button className="btn bs" onClick={onClose}>Cancel</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── START JOB MODAL ───────────────────────────────────────────────────────────
+function StartJobModal({companies,services,recentClients=[],isMC,hasRunning,onStart,onClose,onAddCo,onAddSvc}){
+  const [ct,setCt]=useState("private");const [cn,setCn]=useState("");const [svc,setSvc]=useState("");const [err,setErr]=useState("");
+  const go=()=>{
+    if(!cn.trim()){setErr(ct==="private"?"Enter client name.":"Select a company.");return;}
+    if(!svc){setErr("Select a service.");return;}
+    onStart(ct,cn.trim(),svc);
+  };
+  return <div className="mbg" onClick={onClose}>
+    <div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="mt-t">▶ START NEW JOB</div>
+      {hasRunning&&<div style={{background:"rgba(255,169,64,.1)",border:"1px solid rgba(255,169,64,.25)",borderRadius:8,padding:"9px 12px",marginBottom:12,fontSize:12,color:"var(--or)"}}>⚠️ Current job will be paused automatically</div>}
+      {err&&<div className="err">{err}</div>}
+      <ClientPicker type={ct} setType={setCt} name={cn} setName={setCn} companies={companies} recentClients={recentClients} onAddCo={onAddCo}/>
+      <SvcPicker services={services} sel={svc} onSel={setSvc} onAdd={onAddSvc} cls={isMC?"og":"ob"}/>
+      <div style={{display:"flex",gap:8,marginTop:14}}>
+        <button className="btn bp" style={{flex:1,padding:"12px",fontSize:14}} onClick={go}>▶ Start Timer</button>
+        <button className="btn bs" onClick={onClose}>Cancel</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── ACTIVE JOB CARD ───────────────────────────────────────────────────────────
+function ActiveJobCard({session,canResume,onPause,onResume,onStop}){
+  const [,tick]=useState(0);
+  const isRun=session.status==="running";
+  useEffect(()=>{if(!isRun)return;const t=setInterval(()=>tick(n=>n+1),1000);return()=>clearInterval(t);},[isRun]);
+  const el=getEl(session),col=isRun?"var(--gn)":"var(--or)";
+  return <div className={"job-card "+(isRun?"running":"paused")}>
+    <div className="job-info">
+      <div className="job-client">{session.clientName}</div>
+      <div className="job-service">{session.service}</div>
+      <div className="job-meta">
+        {isRun?<><span className="dot"/>Running</>:"⏸ Paused"}
+        {"   "}Started {fmtT(session.startedAt)}
+      </div>
+    </div>
+    <div className="job-timer" style={{color:col}}>{fmtDur(el)}</div>
+    <div className="job-controls">
+      {isRun
+        ?<button className="btn bsm" style={{background:"var(--or)",color:"#000",border:"none",fontWeight:700,minWidth:60}} onClick={onPause}>⏸ Pause</button>
+        :<button className="btn bsm" style={{background:canResume?"var(--gn)":"var(--s2)",color:canResume?"#000":"var(--mt)",border:canResume?"none":"1px solid var(--bd)",fontWeight:700,minWidth:60,cursor:canResume?"pointer":"not-allowed"}} onClick={canResume?onResume:undefined} title={!canResume?"Pause the running job first":""}>▶ Resume</button>
+      }
+      <button className="btn bd-btn bsm" style={{minWidth:60,fontWeight:700}} onClick={onStop}>⏹ Stop</button>
+    </div>
+  </div>;
+}
+
+// ── COMPLETE JOB MODAL ────────────────────────────────────────────────────────
+function CompleteJobModal({session,isMC,onSave,onClose}){
+  const endedAt=useRef(new Date().toISOString()).current;
+  const totalMs=getEl(session);
+  const [bill,setBill]=useState("");const [paid,setPaid]=useState("");const [prt,setPrt]=useState("");
+  const [pm,setPm]=useState("cash");const [fat,setFat]=useState(false);const [nte,setNte]=useState("");const [err,setErr]=useState("");
+  const save=()=>{
+    const b=parseFloat(bill)||0;if(b<=0){setErr("Enter the job bill.");return;}
+    const p=parseFloat(paid)||0,pc=parseFloat(prt)||0,d=Math.max(0,b-p),st=p>=b?"paid":p<=0?"unpaid":"partial";
+    onSave({
+      id:uid(),workerId:session.wid,workerName:session.wname,workshopType:isMC?"mechanic":"carwash",
+      clientType:session.clientType,clientName:session.clientName,service:session.service,
+      jobBill:b,amount:b,amountPaid:p,partsCost:isMC?pc:0,profit:isMC?p-pc:0,
+      dueAmount:d,paymentStatus:st,paymentMethod:pm,fattura:fat,note:nte.trim(),
+      date:toDay(),timestamp:new Date().toISOString(),
+      startedAt:session.startedAt,endedAt,durationMs:totalMs,
+    },{...session,status:"completed",endedAt,totalMs,accMs:totalMs});
+  };
+  return <div className="mbg" onClick={onClose}>
+    <div className="modal" onClick={e=>e.stopPropagation()}>
+      <div className="mt-t">⏹ COMPLETE JOB</div>
+      {/* Timing summary */}
+      <div style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:10,padding:14,marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:15,marginBottom:10}}>{session.clientName} — {session.service}</div>
+        <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+          <div>
+            <div style={{fontSize:10,color:"var(--mt)",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:3}}>🕐 Started</div>
+            <div style={{fontSize:15,fontWeight:600}}>{fmtT(session.startedAt)}</div>
+          </div>
+          <div style={{color:"var(--mt)",fontSize:18,alignSelf:"flex-end",paddingBottom:2}}>→</div>
+          <div>
+            <div style={{fontSize:10,color:"var(--mt)",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:3}}>🕐 Ended</div>
+            <div style={{fontSize:15,fontWeight:600}}>{fmtT(endedAt)}</div>
+          </div>
+          <div style={{marginLeft:"auto"}}>
+            <div style={{fontSize:10,color:"var(--mt)",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:3}}>⏱ Duration</div>
+            <div style={{fontFamily:"Bebas Neue",fontSize:26,letterSpacing:2,color:"var(--ac)"}}>{fmtDur(totalMs)}</div>
+          </div>
+        </div>
+      </div>
+      {/* Payment */}
+      {err&&<div className="err">{err}</div>}
+      <div className={isMC?"fg3":"fg"}>
+        <div className="f"><label>Job Bill (SAR)</label><input type="number" inputMode="decimal" placeholder="Total charge" value={bill} onChange={e=>setBill(e.target.value)} autoFocus/></div>
+        <div className="f"><label>Amount Paid (SAR)</label><input type="number" inputMode="decimal" placeholder="0 if not paid" value={paid} onChange={e=>setPaid(e.target.value)}/></div>
+        {isMC&&<div className="f"><label>Parts Cost (SAR)</label><input type="number" inputMode="decimal" placeholder="0 if none" value={prt} onChange={e=>setPrt(e.target.value)}/></div>}
+      </div>
+      <PayBox bill={bill} paid={paid}/>
+      <PmPicker val={pm} onChange={setPm}/>
+      <FatturaPicker val={fat} onChange={setFat}/>
+      <div className="f"><label>Note</label><input placeholder="Optional…" value={nte} onChange={e=>setNte(e.target.value)}/></div>
+      <div style={{display:"flex",gap:8,marginTop:12}}>
+        <button className="btn bp" style={{flex:1,padding:"12px",fontSize:14}} onClick={save}>✓ Save & Complete Job</button>
+        <button className="btn bs" onClick={onClose}>Cancel</button>
+      </div>
+    </div>
+  </div>;
+}
+
+// ── LIVE TAB ──────────────────────────────────────────────────────────────────
+function LiveTab({sessions}){
+  const [,tick]=useState(0);
+  useEffect(()=>{const t=setInterval(()=>tick(n=>n+1),1000);return()=>clearInterval(t);},[]);
+  const run=sessions.filter(s=>s.status==="running"),psd=sessions.filter(s=>s.status==="paused");
+  const done=sessions.filter(s=>s.status==="completed"&&s.endedAt&&new Date(s.endedAt).toDateString()===new Date().toDateString()).sort((a,b)=>new Date(b.endedAt)-new Date(a.endedAt));
+  const Card=({s})=>{const el=getEl(s),col=s.status==="running"?"var(--gn)":s.status==="paused"?"var(--or)":"var(--mt)";
+    return <div style={{background:"var(--s1)",border:"1px solid var(--bd)",borderRadius:9,padding:14,marginBottom:10,borderLeft:"3px solid "+col}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:14,fontWeight:700}}>{s.wtype==="carwash"?"🚿":"🔧"} {s.clientName}</div>
+          <div style={{fontSize:12,color:"var(--mt)",marginTop:2}}>{s.service}   {s.wname}</div>
+          {s.status==="completed"&&<div style={{fontSize:11,color:"var(--mt)",marginTop:2}}>Ended {fmtT(s.endedAt)}   {fmtDur(s.totalMs||0)}</div>}
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontFamily:"Bebas Neue",fontSize:26,color:col}}>{fmtDur(el)}</div>
+          <div style={{fontSize:10,color:"var(--mt)",textTransform:"uppercase",letterSpacing:1}}>{s.status}</div>
+        </div>
+      </div>
+    </div>;};
+  return <div>
+    <div className="sg">
+      <div className="sc" style={{borderTopColor:"var(--gn)"}}><div className="sl"><span className="dot"/>Active</div><div className="sv sg2">{run.length}</div></div>
+      <div className="sc" style={{borderTopColor:"var(--or)"}}><div className="sl">⏸ Paused</div><div className="sv sor">{psd.length}</div></div>
+      <div className="sc"><div className="sl">✅ Done Today</div><div className="sv">{done.length}</div></div>
+    </div>
+    {run.length>0&&<><div className="stit" style={{color:"var(--gn)"}}>🔴 LIVE</div>{run.map(s=><Card key={s.id} s={s}/>)}</>}
+    {run.length===0&&<div style={{background:"rgba(29,200,160,.06)",border:"1px solid rgba(29,200,160,.15)",borderRadius:9,padding:"12px 16px",marginBottom:14,fontSize:13,color:"var(--gn)"}}>No jobs running right now.</div>}
+    {psd.length>0&&<><div className="stit" style={{color:"var(--or)",marginTop:4}}>⏸ PAUSED</div>{psd.map(s=><Card key={s.id} s={s}/>)}</>}
+    {done.length>0&&<><div className="stit" style={{marginTop:4}}>✅ COMPLETED TODAY</div>{done.map(s=><Card key={s.id} s={s}/>)}</>}
+    {sessions.length===0&&<div className="empty">No timer sessions yet.</div>}
+  </div>;
+}
+
+// ── CHARTS ────────────────────────────────────────────────────────────────────
+function RevenueChart({jobs}){
+  if(typeof Recharts==="undefined"||!ResponsiveContainer)return <div style={{height:190,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--mt)",fontSize:13}}>📊 Chart loading...</div>;
+  const days=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));const ds=d.toISOString().split("T")[0];const dj=jobs.filter(j=>j.date===ds);return{day:d.toLocaleDateString("en-GB",{weekday:"short"}),cw:dj.filter(j=>j.workshopType==="carwash").reduce((s,j)=>s+(j.jobBill||0),0),mc:dj.filter(j=>j.workshopType==="mechanic").reduce((s,j)=>s+(j.profit||0),0)};});
+  const tt=({active,payload,label})=>active&&payload?.length?<div style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:"8px 12px",fontSize:12}}><div style={{fontWeight:700,marginBottom:4}}>{label}</div>{payload.map((p,i)=><div key={i} style={{color:p.fill}}>{p.name}: {money(p.value)}</div>)}</div>:null;
+  try{return <ResponsiveContainer width="100%" height={190}><BarChart data={days} barGap={4}><XAxis dataKey="day" tick={{fill:"var(--mt)",fontSize:11}} axisLine={false} tickLine={false}/><YAxis tick={{fill:"var(--mt)",fontSize:10}} axisLine={false} tickLine={false} width={40}/><Tooltip content={tt} cursor={{fill:"rgba(255,255,255,.03)"}}/><Bar dataKey="cw" fill="#4F9EF8" name="Car Wash" radius={[4,4,0,0]}/><Bar dataKey="mc" fill="#1DC8A0" name="MC Profit" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>;}catch(e){return <div style={{height:190,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--mt)",fontSize:13}}>Chart unavailable</div>;}
+}
+function ServiceDonut({jobs}){
+  if(typeof Recharts==="undefined"||!PieChart)return <div style={{height:190,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--mt)",fontSize:13}}>🍩 Chart loading...</div>;
+  const mp={};jobs.forEach(j=>{mp[j.service]=(mp[j.service]||0)+1;});
+  const data=Object.entries(mp).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,value])=>({name,value}));
+  const COLS=["#1DC8A0","#4F9EF8","#FFA940","#FF6B6B","#A78BFA"];
+  if(!data.length)return <div className="empty">No data yet</div>;
+  const tt=({active,payload})=>active&&payload?.length?<div style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:"8px 12px",fontSize:12}}>{payload[0].name}: {payload[0].value}</div>:null;
+  try{return <ResponsiveContainer width="100%" height={190}><PieChart><Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={52} outerRadius={80} paddingAngle={3}>{data.map((_,i)=><Cell key={i} fill={COLS[i%5]}/>)}</Pie><Tooltip content={tt}/></PieChart></ResponsiveContainer>;}catch(e){return <div style={{height:190,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--mt)",fontSize:13}}>Chart unavailable</div>;}
+}
+
+// ── WORKER PAGE ───────────────────────────────────────────────────────────────
+function WorkerPage({user,jobs,companies,services,sessions,isMC,onAdd,onUpd,onAddSvc,onAddCo,onStartS,onPauseS,onResumeS,onStopS,onLogout,onChangePw}){
+  const [showStart,setShowStart]=useState(false);
+  const [completing,setCompleting]=useState(null);
+  const [showCPW,setShowCPW]=useState(false);
+  const [toast,setToast]=useState("");
+  const [edit,setEdit]=useState(null);
+  const [sd,setSd]=useState(toDay());
+
+  const mySess=sessions.filter(s=>s.wid===user.id&&s.status!=="completed");
+  const recentClients=[...new Set(jobs.filter(j=>j.clientType==="private"&&j.clientName).map(j=>j.clientName))].sort();
+  const running=mySess.find(s=>s.status==="running");
+  const mine=jobs.filter(j=>j.workerId===user.id).slice().reverse();
+  const todM=mine.filter(j=>j.date===toDay());
+
+  const handleStartNew=async(ct,cn,svc)=>{
+    if(running){
+      await onPauseS({...running,status:"paused",accMs:getEl(running)});
+    }
+    const now=new Date().toISOString();
+    await onStartS({id:uid(),wid:user.id,wname:user.name,wtype:isMC?"mechanic":"carwash",clientType:ct,clientName:cn,service:svc,status:"running",startedAt:now,resumeAt:now,accMs:0,totalMs:null,endedAt:null});
+    setShowStart(false);
+    setToast(running?`Paused "${running.clientName}", started "${cn}"`:`Timer started for ${cn}`);
+  };
+  const handleStop=s=>{
+    const totalMs=getEl(s);
+    setCompleting({...s,totalMs,endedAtRef:new Date().toISOString()});
+  };
+  const handleComplete=async(job,sess)=>{
+    await onAdd(job);
+    await onStopS(sess);
+    setCompleting(null);
+    setToast("✅ Job saved!");
+  };
+  const ist={background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:"7px 10px",color:"var(--tx)",fontFamily:"Inter,sans-serif",fontSize:12,outline:"none"};
+  const sdJ=mine.filter(j=>j.date===sd);
+
+  return <div style={{minHeight:"100vh"}}>
+    <G/>
+    <div className="top-bar">
+      <div className="brand-sm">{isMC?"🔧 Mechanic":"🚿 Car Wash"}</div>
+      <div style={{display:"flex",alignItems:"center",gap:9}}>
+        <span className={"pill "+(isMC?"pm2":"pc")}>{isMC?"Mechanic":"Car Wash"}</span>
+        <span style={{fontSize:13,color:"var(--mt)"}}>👤 {user.name}</span>
+        <button className="btn bs bsm" onClick={()=>setShowCPW(true)}>🔑</button>
+        <button className="btn bs bsm" onClick={onLogout}>Logout</button>
+      </div>
+    </div>
+    <div className="w-main">
+      {/* ACTIVE JOBS */}
+      <div style={{marginBottom:22}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:13}}>
+          <div>
+            <div className="stit" style={{margin:0}}>ACTIVE JOBS</div>
+            {mySess.length>0&&<div style={{fontSize:11,color:"var(--mt)",marginTop:2}}>{mySess.filter(s=>s.status==="running").length} running   {mySess.filter(s=>s.status==="paused").length} paused</div>}
+          </div>
+          <button className="btn bp" style={{fontWeight:700,fontSize:13,padding:"9px 18px"}} onClick={()=>setShowStart(true)}>▶ Start New Job</button>
+        </div>
+        {mySess.length===0
+          ?<div className="start-zone" onClick={()=>setShowStart(true)}>
+            <div style={{fontSize:36,marginBottom:10}}>▶</div>
+            <div style={{fontSize:16,fontWeight:700,color:"var(--tx)",marginBottom:4}}>No active jobs</div>
+            <div style={{fontSize:13,color:"var(--mt)"}}>Tap to start a new job timer</div>
+          </div>
+          :<>
+            {mySess.filter(s=>s.status==="running").map(s=><ActiveJobCard key={s.id} session={s} canResume={true} onPause={()=>onPauseS({...s,status:"paused",accMs:getEl(s)})} onResume={()=>onResumeS({...s,status:"running",resumeAt:new Date().toISOString()})} onStop={()=>handleStop(s)}/>)}
+            {mySess.filter(s=>s.status==="paused").length>0&&<>
+              <div style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1.5,color:"var(--or)",margin:"12px 0 8px",display:"flex",alignItems:"center",gap:7}}>
+                <span>⏸ Paused</span>
+                <span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:"var(--mt)",fontSize:11}}>{running?"— pause current job to resume":"— tap ▶ to resume"}</span>
+              </div>
+              {mySess.filter(s=>s.status==="paused").map(s=><ActiveJobCard key={s.id} session={s} canResume={!running} onPause={()=>onPauseS({...s,status:"paused",accMs:getEl(s)})} onResume={()=>onResumeS({...s,status:"running",resumeAt:new Date().toISOString()})} onStop={()=>handleStop(s)}/>)}
+            </>}
+          </>
+        }
+        {mySess.length>0&&!running&&(
+          <button className="btn bp bfull" style={{marginTop:4,padding:"11px",fontSize:13}} onClick={()=>setShowStart(true)}>▶ Start Another Job</button>
+        )}
+      </div>
+
+      {/* STATS */}
+      <div className="sg">
+        <div className={"sc "+(isMC?"mc":"cw")}><div className="sl">Today Jobs</div><div className={"sv "+(isMC?"sg2":"sb2")}>{todM.length}</div></div>
+        <div className={"sc "+(isMC?"mc":"cw")}><div className="sl">{isMC?"Today Profit":"Today Revenue"}</div><div className={"sv "+(isMC?"sg2":"sb2")}>{money(todM.reduce((s,j)=>s+(isMC?j.profit||0:j.jobBill||0),0))}</div></div>
+        <div className="sc rd"><div className="sl">Today Debt</div><div className="sv srd">{money(todM.reduce((s,j)=>s+dueAmt(j),0))}</div></div>
+        <div className="sc"><div className="sl">Total Jobs</div><div className="sv">{mine.length}</div></div>
+      </div>
+
+      {/* COMPLETED JOBS */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:9,marginBottom:10}}>
+        <div className="stit" style={{margin:0}}>COMPLETED JOBS</div>
+        <div style={{display:"flex",gap:7,flexWrap:"wrap",alignItems:"center"}}>
+          <button className="btn bp bsm" onClick={()=>bldPDF(todM,"Today "+toDay(),isMC)}>📄 PDF</button>
+          <button className="btn bxl bsm" onClick={()=>shareBlob(bldXL(todM,"Today",isMC),"AutoShop_"+toDay()+".xlsx")}>📊 Excel</button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+        <span style={{fontSize:12,color:"var(--mt)"}}>Share date:</span>
+        <input type="date" value={sd} onChange={e=>setSd(e.target.value)} style={ist}/>
+        <button className="btn bp bsm" onClick={()=>bldPDF(sdJ,sd,isMC)}>📄</button>
+        <button className="btn bxl bsm" onClick={()=>shareBlob(bldXL(sdJ,sd,isMC),"AutoShop_"+sd+".xlsx")}>📊</button>
+      </div>
+      <div className="tbl-wrap">
+        {mine.length===0?<div className="empty">No completed jobs yet.</div>:
+          <table>
+            <thead><tr>{(isMC?["Client","Service","From","To","Duration","Bill","Paid","Due","Parts","Profit","Status","↗"]:["Client","Service","From","To","Duration","Bill","Paid","Due","Status","↗"]).map(col=><th key={col}>{col}</th>)}</tr></thead>
+            <tbody>{mine.map(j=><tr key={j.id} className={prc(j)}>
+              <td style={{fontWeight:600}}>{j.clientName}</td>
+              <td><span className={"badge "+(isMC?"bmc":"bcw")}>{j.service}</span></td>
+              <td style={{fontSize:11,color:"var(--mt)"}}>{j.startedAt?fmtT(j.startedAt):"—"}</td>
+              <td style={{fontSize:11,color:"var(--mt)"}}>{j.endedAt?fmtT(j.endedAt):"—"}</td>
+              <td><span className="timing-chip" style={{color:"var(--ac)"}}>{j.durationMs?fmtDur(j.durationMs):"—"}</span></td>
+              <td className="mn" style={{color:"var(--bl)"}}>{money(j.jobBill||0)}</td>
+              <td className="mn" style={{color:"var(--gn)"}}>{money(j.amountPaid||0)}</td>
+              <td className="mn" style={{color:dueAmt(j)>0?"var(--rd)":"var(--gn)"}}>{money(dueAmt(j))}</td>
+              {isMC&&<><td className="mn" style={{color:"var(--rd)"}}>{money(j.partsCost||0)}</td><td className="mn" style={{color:(j.profit||0)>=0?"var(--gn)":"var(--rd)"}}>{money(j.profit||0)}</td></>}
+              <td><SBadge job={j}/></td>
+              <td><button className="btn bs bsm" onClick={()=>setEdit(j)}>✏️</button></td>
+            </tr>)}</tbody>
+          </table>}
+      </div>
+    </div>
+
+    {toast&&<Toast msg={toast} onDone={()=>setToast("")}/>}
+    {showStart&&<StartJobModal companies={companies} services={services} recentClients={recentClients} isMC={isMC} hasRunning={!!running} onStart={handleStartNew} onClose={()=>setShowStart(false)} onAddCo={onAddCo} onAddSvc={onAddSvc}/>}
+    {completing&&<CompleteJobModal session={completing} isMC={isMC} onSave={handleComplete} onClose={()=>setCompleting(null)}/>}
+    {edit&&<EditModal job={edit} services={services} companies={companies} recentClients={recentClients} onAddCo={onAddCo} onAddSvc={onAddSvc} onSave={j=>{onUpd(j);setEdit(null);setToast("Updated!");}} onClose={()=>setEdit(null)}/>}
+  </div>;
+}
+
+// ── OWNER PAGE ────────────────────────────────────────────────────────────────
+function OwnerPage({user,users,jobs,companies,cwSvc,mcSvc,sessions,onAddW,onDelW,onDelJ,onUpdJ,onAddCo,onDelCo,onAddCw,onDelCw,onAddMc,onDelMc,onLogout,onRefresh,onChangePw}){
+  const [nav,setNav]=useState("dashboard");const [theme,setTheme]=useState("light");const [sideOpen,setSideOpen]=useState(false);const [showCPW,setShowCPW]=useState(false);const [resetW,setResetW]=useState(null);
+  const [fil,setFil]=useState({s:"",w:"",d:toDay()});const [pFil,setPFil]=useState("all");const [shopFil,setShopFil]=useState("all");const [methFil,setMethFil]=useState("all");const [fatFil,setFatFil]=useState("all");
+  const [payJ,setPayJ]=useState(null);const [addW,setAddW]=useState(false);
+  const [nw,setNw]=useState({name:"",username:"",password:"",type:"carwash"});const [nwErr,setNwErr]=useState("");
+  const [delW,setDelW]=useState(null);const [toast,setToast]=useState("");
+  const [ed,setEd]=useState(toDay());const [eTo,setETo]=useState(toDay());const [ew,setEw]=useState("");
+  const [live,setLive]=useState(sessions);
+  const toggleTheme=()=>{const n=theme==="dark"?"light":"dark";setTheme(n);document.documentElement.setAttribute("data-theme",n);};
+  useEffect(()=>{document.documentElement.setAttribute("data-theme","light");},[]);
+  useEffect(()=>{setLive(sessions);},[sessions]);
+  useEffect(()=>{const t=setInterval(async()=>{const s=await sbGet("timer_sessions","select=*");setLive(s.map(db2s));},4000);return()=>clearInterval(t);},[]);
+  const workers=users.filter(u=>u.role==="worker");
+  const cwJ=jobs.filter(j=>j.workshopType==="carwash"),mcJ=jobs.filter(j=>j.workshopType==="mechanic");
+  const debtJ=jobs.filter(j=>pSt(j)!=="paid"),todJ=jobs.filter(j=>j.date===toDay());
+  const aFil=arr=>arr.filter(j=>{const q=fil.s.toLowerCase();return(!q||j.clientName.toLowerCase().includes(q)||j.service.toLowerCase().includes(q)||(j.workerName||"").toLowerCase().includes(q))&&(!fil.w||j.workerId===fil.w)&&(!fil.d||j.date===fil.d);}).slice().reverse();
+  const shown=nav==="carwash"?aFil(cwJ):nav==="mechanic"?aFil(mcJ):aFil(jobs);
+  const payShown=jobs.filter(j=>(pFil==="all"||pSt(j)===pFil)&&(shopFil==="all"||j.workshopType===shopFil)&&(methFil==="all"||j.paymentMethod===methFil)&&(fatFil==="all"||(fatFil==="yes"?j.fattura===true:j.fattura!==true))).slice().reverse();
+  const ist={background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:"8px 10px",color:"var(--tx)",fontFamily:"Inter,sans-serif",fontSize:12,outline:"none"};
+  const saveW=()=>{if(!nw.name.trim()||!nw.username.trim()||!nw.password.trim())return setNwErr("All fields required.");if(users.find(u=>u.username.toLowerCase()===nw.username.trim().toLowerCase()))return setNwErr("Username taken.");onAddW({id:uid(),...nw,name:nw.name.trim(),username:nw.username.trim(),password:nw.password.trim(),role:"worker"});setNw({name:"",username:"",password:"",type:"carwash"});setAddW(false);setNwErr("");setToast("Worker added!");};
+  const rJ=()=>{const f=ed<=eTo?ed:eTo,t=ed<=eTo?eTo:ed;return jobs.filter(j=>j.date>=f&&j.date<=t);};
+  const wJ=()=>ew?jobs.filter(j=>j.workerId===ew):jobs;
+  const OS=({gJ,lbl,mc=false})=>{const jbs=gJ();return <div style={{display:"flex",gap:7,flexWrap:"wrap",marginTop:8}}><button className="btn bp bsm" onClick={()=>bldPDF(jbs,lbl,mc)}>📄 PDF</button><button className="btn bxl bsm" onClick={()=>shareBlob(bldXL(jbs,lbl,mc),"AS_"+lbl.replace(/[^a-z0-9]/gi,"_")+".xlsx")}>📊 Excel</button><span style={{fontSize:11,color:"var(--mt)"}}>{jbs.length} jobs</span></div>;};
+  const NAV=[{id:"dashboard",icon:"🏠",label:"Dashboard"},{id:"jobs",icon:"📋",label:"All Jobs"},{id:"carwash",icon:"🚿",label:"Car Wash"},{id:"mechanic",icon:"🔧",label:"Mechanic"},{id:"live",icon:"⏱",label:"Live"},{id:"payments",icon:"💳",label:"Payments"},{id:"debt",icon:"⚠️",label:"Debt",badge:debtJ.length},{id:"workers",icon:"👷",label:"Workers"},{id:"manage",icon:"⚙️",label:"Manage"},{id:"export",icon:"📥",label:"Export"}];
+  const PH=({title,children})=><><div className="pg-header" style={{paddingLeft:60}}><div className="pg-title">{title}</div><button className="btn bs bsm" onClick={onRefresh}>↻ Refresh</button></div><div className="pg-body">{children}</div></>;
+  const JTbl=({jobs:jbs,mc})=>jbs.length===0?<div className="empty">No jobs found.</div>:<table><thead><tr>{(mc?["Client","Worker","Service","From","To","Dur","Bill","Paid","Due","Parts","Profit","Status","Date",""]:["Client","Worker","Shop","Service","From","To","Dur","Bill","Paid","Due","Status","Date",""]).map(col=><th key={col}>{col}</th>)}</tr></thead><tbody>{jbs.map(j=><tr key={j.id} className={prc(j)}><td style={{fontWeight:600}}>{j.clientName}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.workerName}</td>{!mc&&<td><span className={"badge "+(j.workshopType==="carwash"?"bcw":"bmc")}>{j.workshopType==="carwash"?"🚿":"🔧"}</span></td>}<td style={{fontSize:12}}>{j.service}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.startedAt?fmtT(j.startedAt):"—"}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.endedAt?fmtT(j.endedAt):"—"}</td><td><span className="timing-chip" style={{color:"var(--ac)",fontSize:10}}>{j.durationMs?fmtDur(j.durationMs):"—"}</span></td><td className="mn" style={{color:"var(--bl)"}}>{money(j.jobBill||0)}</td><td className="mn" style={{color:"var(--gn)"}}>{money(j.amountPaid||0)}</td><td className="mn" style={{color:dueAmt(j)>0?"var(--rd)":"var(--gn)"}}>{money(dueAmt(j))}</td>{mc&&<><td className="mn" style={{color:"var(--rd)"}}>{money(j.partsCost||0)}</td><td className="mn" style={{color:(j.profit||0)>=0?"var(--gn)":"var(--rd)"}}>{money(j.profit||0)}</td></>}<td><SBadge job={j}/></td><td style={{color:"var(--mt)",fontSize:11}}>{fmtD(j.timestamp)}</td><td><button className="btn bd-btn bsm" onClick={()=>onDelJ(j.id)}>✕</button></td></tr>)}</tbody></table>;
+  return <div className="layout"><G/>
+    {/* Hamburger - always visible, fixed position, cannot be hidden */}
+    <button onClick={()=>setSideOpen(o=>!o)} style={{position:"fixed",top:8,left:8,width:44,height:44,borderRadius:10,background:"#1DC8A0",color:"#000",border:"none",cursor:"pointer",fontSize:24,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center",zIndex:500,boxShadow:"0 3px 14px rgba(0,0,0,.4)",WebkitTapHighlightColor:"transparent",touchAction:"manipulation"}}>☰</button>
+    {sideOpen&&<div onClick={()=>setSideOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:498,backdropFilter:"blur(2px)"}}/>}
+    <div style={{position:"fixed",left:0,top:0,bottom:0,width:260,background:"#0A0F1C",borderRight:"1px solid #141C2E",display:"flex",flexDirection:"column",zIndex:499,transform:sideOpen?"translateX(0)":"translateX(-260px)",transition:"transform .28s ease",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+      <div className="sb-logo"><div className="sb-brand">🔧 AutoShop</div><div className="sb-sub">Workshop Manager</div></div>
+      <nav className="sb-nav">{NAV.map(n=><div key={n.id} className={"nav-item"+(nav===n.id?" active":"")} onClick={()=>{setNav(n.id);setSideOpen(false);}}><span className="nav-icon">{n.icon}</span><span style={{flex:1}}>{n.label}</span>{n.badge>0&&<span className="nav-badge">{n.badge}</span>}</div>)}</nav>
+      <div className="sb-foot"><div style={{fontSize:11,color:"var(--mt)",marginBottom:8}}>👤 {user.name}</div><button className="theme-btn" onClick={toggleTheme}>{theme==="dark"?"☀️ Light Mode":"🌙 Dark Mode"}</button><button className="btn bs bsm" style={{marginTop:8,width:"100%"}} onClick={()=>setShowCPW(true)}>🔑 Change Password</button><button className="btn bs bsm" style={{marginTop:6,width:"100%"}} onClick={onLogout}>Logout</button></div>
+    </div>
+    <div className="main-area">
+      {isMobile&&<div style={{position:"sticky",top:0,zIndex:101,background:"#0A0F1C",borderBottom:"1px solid #141C2E",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+        {NAV.map(n=><button key={n.id} onClick={()=>setNav(n.id)} style={{flexShrink:0,padding:"12px 14px",background:"transparent",border:"none",borderBottom:nav===n.id?"3px solid #1DC8A0":"3px solid transparent",color:nav===n.id?"#1DC8A0":"#5A6B88",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:5,WebkitTapHighlightColor:"transparent"}}>
+          <span>{n.icon}</span><span>{n.label}</span>
+          {n.badge>0&&<span style={{background:"#FF6B6B",color:"#fff",borderRadius:20,padding:"1px 5px",fontSize:10,minWidth:16,textAlign:"center"}}>{n.badge}</span>}
+        </button>)}
+      </div>}
+      {nav==="dashboard"&&<PH title="📊 DASHBOARD">
+        <div className="sg">
+          <div className="sc"><div className="sl">Total Jobs</div><div className="sv sa">{jobs.length}</div></div>
+          <div className="sc"><div className="sl">Today</div><div className="sv">{todJ.length}</div></div>
+          <div className="sc cw"><div className="sl">CW Revenue</div><div className="sv sb2">{money(cwJ.reduce((s,j)=>s+(j.jobBill||0),0))}</div></div>
+          <div className="sc mc"><div className="sl">MC Profit</div><div className="sv sg2">{money(mcJ.reduce((s,j)=>s+(j.profit||0),0))}</div></div>
+          <div className="sc rd"><div className="sl">Total Debt</div><div className="sv srd">{money(jobs.reduce((s,j)=>s+dueAmt(j),0))}</div></div>
+        </div>
+        <div className="charts-row"><div className="chart-card"><div className="chart-title">📈 Revenue Last 7 Days</div><RevenueChart jobs={jobs}/></div><div className="chart-card"><div className="chart-title">🍩 Top Services</div><ServiceDonut jobs={jobs}/></div></div>
+        <div className="tbl-wrap"><div style={{padding:"12px 14px",borderBottom:"1px solid var(--bd)",fontWeight:700,fontSize:13}}>🕐 Recent Jobs</div>{jobs.length===0?<div className="empty">No jobs yet.</div>:<table><thead><tr>{["Client","Shop","Service","Worker","From","To","Duration","Bill","Status"].map(col=><th key={col}>{col}</th>)}</tr></thead><tbody>{jobs.slice().reverse().slice(0,8).map(j=><tr key={j.id} className={prc(j)}><td style={{fontWeight:600}}>{j.clientName}</td><td><span className={"badge "+(j.workshopType==="carwash"?"bcw":"bmc")}>{j.workshopType==="carwash"?"🚿":"🔧"}</span></td><td style={{fontSize:12}}>{j.service}</td><td style={{fontSize:12,color:"var(--mt)"}}>{j.workerName}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.startedAt?fmtT(j.startedAt):"—"}</td><td style={{fontSize:11,color:"var(--mt)"}}>{j.endedAt?fmtT(j.endedAt):"—"}</td><td><span className="timing-chip" style={{color:"var(--ac)",fontSize:10}}>{j.durationMs?fmtDur(j.durationMs):"—"}</span></td><td className="mn" style={{color:"var(--bl)"}}>{money(j.jobBill||0)}</td><td><SBadge job={j}/></td></tr>)}</tbody></table>}</div>
+      </PH>}
+      {["jobs","carwash","mechanic"].includes(nav)&&<PH title={nav==="carwash"?"🚿 CAR WASH":nav==="mechanic"?"🔧 MECHANIC":"📋 ALL JOBS"}>
+        <div className="filters">
+          <input placeholder="🔍 Search…" value={fil.s} onChange={e=>setFil({...fil,s:e.target.value})} style={{minWidth:140}}/>
+          <select value={fil.w} onChange={e=>setFil({...fil,w:e.target.value})}><option value="">All Workers</option>{workers.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select>
+          <input type="date" value={fil.d} onChange={e=>setFil({...fil,d:e.target.value})}/>
+          {(fil.s||fil.w||fil.d)&&<button className="btn bs bsm" onClick={()=>setFil({s:"",w:"",d:""})}>✕ Clear</button>}
+          <span style={{fontSize:12,color:"var(--mt)",marginLeft:"auto"}}>{shown.length} jobs</span>
+        </div>
+        <div className="tbl-wrap"><JTbl jobs={shown} mc={nav==="mechanic"}/></div>
+      </PH>}
+      {nav==="live"&&<PH title="⏱ LIVE TIMERS"><LiveTab sessions={live}/></PH>}
+      {nav==="payments"&&<PH title="💳 PAYMENTS">
+        <div style={{background:"var(--s1)",border:"1px solid var(--bd)",borderRadius:10,padding:"13px 14px",marginBottom:14}}>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
+            <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,color:"var(--mt)",width:60}}>Status</span>
+            {[["all","All"],["paid","✅ Paid"],["partial","🟠 Partial"],["unpaid","🔴 Unpaid"]].map(([v,l])=><div key={v} className={"pt"+(pFil===v?" on":"")} style={{padding:"5px 11px",fontSize:12}} onClick={()=>setPFil(v)}>{l}</div>)}
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
+            <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,color:"var(--mt)",width:60}}>Shop</span>
+            {[["all","All"],["carwash","🚿 Car Wash"],["mechanic","🔧 Mechanic"]].map(([v,l])=><div key={v} className={"pt"+(shopFil===v?" on":"")} style={{padding:"5px 11px",fontSize:12}} onClick={()=>setShopFil(v)}>{l}</div>)}
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:10}}>
+            <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,color:"var(--mt)",width:60}}>Method</span>
+            {[["all","All"],["cash","💵 Cash"],["card","💳 Card"]].map(([v,l])=><div key={v} className={"pt"+(methFil===v?" on":"")} style={{padding:"5px 11px",fontSize:12}} onClick={()=>setMethFil(v)}>{l}</div>)}
+          </div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+            <span style={{fontSize:10,fontWeight:700,textTransform:"uppercase",letterSpacing:1,color:"var(--mt)",width:60}}>Fattura</span>
+            {[["all","All"],["yes","✅ Yes"],["no","❌ No"]].map(([v,l])=><div key={v} className={"pt"+(fatFil===v?" on":"")} style={{padding:"5px 11px",fontSize:12}} onClick={()=>setFatFil(v)}>{l}</div>)}
+            <span style={{fontSize:12,color:"var(--mt)",marginLeft:"auto"}}>{payShown.length} jobs</span>
+          </div>
+        </div>
+        <div className="tbl-wrap">{payShown.length===0?<div className="empty">No jobs match filters.</div>:<table><thead><tr>{["Client","Shop","Worker","Service","Method","Fattura","Bill","Paid","Due","Status","Date"].map(col=><th key={col}>{col}</th>)}</tr></thead><tbody>{payShown.map(j=><tr key={j.id} className={prc(j)}><td style={{fontWeight:600}}>{j.clientName}</td><td><span className={"badge "+(j.workshopType==="carwash"?"bcw":"bmc")}>{j.workshopType==="carwash"?"🚿":"🔧"}</span></td><td style={{fontSize:11,color:"var(--mt)"}}>{j.workerName}</td><td style={{fontSize:12}}>{j.service}</td><td style={{fontSize:12}}>{pmLabel(j.paymentMethod)}</td><td style={{textAlign:"center",fontSize:14}}>{j.fattura?"✅":"❌"}</td><td className="mn" style={{color:"var(--bl)"}}>{money(j.jobBill||0)}</td><td className="mn" style={{color:"var(--gn)"}}>{money(j.amountPaid||0)}</td><td className="mn" style={{color:dueAmt(j)>0?"var(--rd)":"var(--gn)"}}>{money(dueAmt(j))}</td><td><SBadge job={j}/></td><td style={{color:"var(--mt)",fontSize:11}}>{fmtD(j.timestamp)}</td></tr>)}</tbody></table>}</div>
+      </PH>}
+      {nav==="debt"&&<PH title="⚠️ DEBT">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10,marginBottom:16}}>
+          <div style={{fontSize:13,color:"var(--mt)"}}>Tap 💳 Pay to record a payment</div>
+          <div style={{background:"rgba(255,107,107,.08)",border:"1px solid rgba(255,107,107,.2)",borderRadius:9,padding:"10px 16px",textAlign:"center"}}><div style={{fontSize:10,color:"var(--rd)",fontWeight:700,textTransform:"uppercase",letterSpacing:1}}>Total Due</div><div style={{fontFamily:"Bebas Neue",fontSize:26,color:"var(--rd)"}}>{money(jobs.reduce((s,j)=>s+dueAmt(j),0))} SAR</div></div>
+        </div>
+        <div className="tbl-wrap">{debtJ.length===0?<div className="empty" style={{color:"var(--gn)"}}>🎉 No debt!</div>:<table><thead><tr>{["Client","Shop","Worker","Service","Bill","Paid","Due","Status","Date",""].map(col=><th key={col}>{col}</th>)}</tr></thead><tbody>{debtJ.slice().reverse().map(j=><tr key={j.id} className={prc(j)}><td style={{fontWeight:600}}>{j.clientName}</td><td><span className={"badge "+(j.workshopType==="carwash"?"bcw":"bmc")}>{j.workshopType==="carwash"?"🚿":"🔧"}</span></td><td style={{fontSize:11,color:"var(--mt)"}}>{j.workerName}</td><td style={{fontSize:12}}>{j.service}</td><td className="mn" style={{color:"var(--bl)"}}>{money(j.jobBill||0)}</td><td className="mn" style={{color:"var(--gn)"}}>{money(j.amountPaid||0)}</td><td className="mn" style={{color:"var(--rd)",fontWeight:700}}>{money(dueAmt(j))}</td><td><SBadge job={j}/></td><td style={{color:"var(--mt)",fontSize:11}}>{fmtD(j.timestamp)}</td><td><button className="btn bor bsm" onClick={()=>setPayJ(j)}>💳 Pay</button></td></tr>)}</tbody></table>}</div>
+      </PH>}
+      {nav==="workers"&&<PH title="👷 WORKERS">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div style={{fontSize:13,color:"var(--mt)"}}>{workers.length} workers</div><button className="btn bp" onClick={()=>setAddW(true)}>+ Add Worker</button></div>
+        <div className="card">{workers.length===0?<div className="empty">No workers yet.</div>:workers.map(w=><div className="wr" key={w.id}><div className="wa">{w.name[0]}</div><div className="wi"><div className="wn">{w.name} <span className={"pill "+(w.type==="carwash"?"pc":"pm2")} style={{fontSize:9}}>{w.type==="carwash"?"CW":"MC"}</span></div><div className="wu">@{w.username}   {jobs.filter(j=>j.workerId===w.id).length} jobs</div></div><button className="btn bs bsm" onClick={()=>setResetW(w)}>🔑</button><button className="btn bd-btn bsm" onClick={()=>setDelW(w)}>Remove</button></div>)}</div>
+      </PH>}
+      {nav==="manage"&&<PH title="⚙️ MANAGE"><ManageList icon="🏢" title="Companies" items={companies} onAdd={onAddCo} onDel={onDelCo} ph="New company…"/><ManageList icon="🚿" title="Car Wash Services" items={cwSvc} onAdd={onAddCw} onDel={onDelCw} ph="New service…"/><ManageList icon="🔧" title="Mechanic Services" items={mcSvc} onAdd={onAddMc} onDel={onDelMc} ph="New service…"/></PH>}
+      {nav==="export"&&<PH title="📥 EXPORT"><div className="card">
+        <div className="ct">TODAY</div><OS gJ={()=>todJ} lbl={"Today "+toDay()}/>
+        <div className="div"/><div className="ct">SPECIFIC DATE</div><input type="date" value={ed} onChange={e=>setEd(e.target.value)} style={{...ist,marginBottom:8}}/><OS gJ={()=>jobs.filter(j=>j.date===ed)} lbl={"Date "+ed}/>
+        <div className="div"/><div className="ct">DATE RANGE</div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end",marginBottom:8}}>
+          <div><div style={{fontSize:10,color:"var(--mt)",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>From</div><input type="date" value={ed} onChange={e=>setEd(e.target.value)} style={ist}/></div>
+          <div style={{color:"var(--mt)",paddingBottom:6,fontSize:16}}>→</div>
+          <div><div style={{fontSize:10,color:"var(--mt)",fontWeight:700,textTransform:"uppercase",letterSpacing:1,marginBottom:4}}>To</div><input type="date" value={eTo} onChange={e=>setETo(e.target.value)} style={ist}/></div>
+        </div><OS gJ={rJ} lbl={(ed<=eTo?ed:eTo)+" to "+(ed<=eTo?eTo:ed)}/>
+        <div className="div"/><div className="ct">BY WORKER</div><div className="pills" style={{margin:"8px 0"}}><div className={"pt"+(!ew?" on":"")} onClick={()=>setEw("")}>All</div>{workers.map(w=><div key={w.id} className={"pt"+(ew===w.id?" on":"")} onClick={()=>setEw(w.id)}>{w.name}</div>)}</div><OS gJ={wJ} lbl={ew?(workers.find(w=>w.id===ew)||{name:"Worker"}).name:"All Workers"}/>
+        <div className="div"/><div className="ct">ALL JOBS</div><OS gJ={()=>jobs} lbl="Full History"/>
+        <div className="div"/><div className="ct">DEBT ONLY</div><OS gJ={()=>debtJ} lbl="Outstanding Debt"/>
+      </div></PH>}
+    </div>
+    {addW&&<div className="mbg" onClick={()=>setAddW(false)}><div className="modal" onClick={e=>e.stopPropagation()}><div className="mt-t">ADD WORKER</div>{nwErr&&<div className="err">{nwErr}</div>}<div className="f"><label>Name</label><input value={nw.name} onChange={e=>setNw({...nw,name:e.target.value})}/></div><div className="f"><label>Username</label><input value={nw.username} onChange={e=>setNw({...nw,username:e.target.value})}/></div><div className="f"><label>Password</label><input type="password" value={nw.password} onChange={e=>setNw({...nw,password:e.target.value})}/></div><div className="f"><label>Type</label><div className="pills"><div className={"pt"+(nw.type==="carwash"?" ob":"")} onClick={()=>setNw({...nw,type:"carwash"})}>🚿 Car Wash</div><div className={"pt"+(nw.type==="mechanic"?" og":"")} onClick={()=>setNw({...nw,type:"mechanic"})}>🔧 Mechanic</div></div></div><div style={{display:"flex",gap:8,marginTop:12}}><button className="btn bp" style={{flex:1}} onClick={saveW}>Add Worker</button><button className="btn bs" onClick={()=>{setAddW(false);setNwErr("");}}>Cancel</button></div></div></div>}
+    {delW&&<div className="mbg"><div className="modal"><div className="mt-t">REMOVE WORKER?</div><p style={{color:"var(--mt)",fontSize:13,marginBottom:16}}>Remove <b style={{color:"var(--tx)"}}>{delW.name}</b>? Their jobs will remain.</p><div style={{display:"flex",gap:8}}><button className="btn bd-btn" style={{flex:1}} onClick={()=>{onDelW(delW.id);setDelW(null);setToast("Removed.");}}>Yes, Remove</button><button className="btn bs" onClick={()=>setDelW(null)}>Cancel</button></div></div></div>}
+    {payJ&&<PayModal job={payJ} onClose={()=>setPayJ(null)} onSave={j=>{onUpdJ(j);setPayJ(null);setToast(j.paymentStatus==="paid"?"✅ Fully paid!":"💳 Recorded!");}}/>}
+    {showCPW&&<ChangePwModal user={user} onClose={()=>setShowCPW(false)} onSave={async pw=>{await onChangePw(user.id,pw);}}/>}
+    {resetW&&<ChangePwModal user={resetW} onClose={()=>setResetW(null)} onSave={async pw=>{await onChangePw(resetW.id,pw);setToast("Password updated for "+resetW.name);setResetW(null);}}/>}
+    {toast&&<Toast msg={toast} onDone={()=>setToast("")}/>}
+  </div>;
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+
+function ChangePwModal({user,onClose,onSave}){
+  const [cur,setCur]=useState("");const [pw1,setPw1]=useState("");const [pw2,setPw2]=useState("");const [err,setErr]=useState("");const [ok,setOk]=useState(false);
+  const save=async()=>{
+    if(!cur){setErr("Enter current password.");return;}
+    if(cur!==user.password){setErr("Current password is wrong.");return;}
+    if(pw1.length<8){setErr("New password must be at least 8 characters.");return;}
+    if(!/[A-Z]/.test(pw1)){setErr("Must include at least one uppercase letter.");return;}
+    if(!/[0-9]/.test(pw1)){setErr("Must include at least one number.");return;}
+    if(pw1!==pw2){setErr("Passwords do not match.");return;}
+    await onSave(pw1);setOk(true);
+  };
+  return <div className="mbg" onClick={onClose}>
+    <div className="modal" style={{width:360}} onClick={e=>e.stopPropagation()}>
+      <div className="mt-t">🔑 CHANGE PASSWORD</div>
+      {ok
+        ?<div style={{textAlign:"center",padding:"20px 0"}}>
+          <div style={{fontSize:36,marginBottom:10}}>✅</div>
+          <div style={{fontWeight:700,marginBottom:6}}>Password changed!</div>
+          <button className="btn bp bfull" style={{marginTop:10}} onClick={onClose}>Done</button>
+        </div>
+        :<>
+          {err&&<div className="err">{err}</div>}
+          <div style={{background:"var(--s2)",borderRadius:8,padding:"10px 12px",marginBottom:12,fontSize:12,color:"var(--mt)"}}>
+            Password must be at least 8 characters, include one uppercase letter and one number.
+          </div>
+          <div className="f"><label>Current Password</label><input type="password" value={cur} onChange={e=>setCur(e.target.value)} autoFocus/></div>
+          <div className="f"><label>New Password</label><input type="password" value={pw1} onChange={e=>setPw1(e.target.value)}/></div>
+          <div className="f"><label>Confirm New Password</label><input type="password" value={pw2} onChange={e=>setPw2(e.target.value)} onKeyDown={e=>e.key==="Enter"&&save()}/></div>
+          <div style={{display:"flex",gap:8,marginTop:12}}>
+            <button className="btn bp" style={{flex:1}} onClick={save}>Save Password</button>
+            <button className="btn bs" onClick={onClose}>Cancel</button>
+          </div>
+        </>
+      }
+    </div>
+  </div>;
+}
+
+function LoginPage({users,onLogin}){
+  const [un,setUn]=useState("");const [pw,setPw]=useState("");const [err,setErr]=useState("");
+  const go=()=>{const u=un.trim().toLowerCase(),p=pw.trim();if(!u||!p){setErr("Enter username and password.");return;}const pool=users.length>0?users:DEF_USERS;const found=pool.find(x=>x.username.toLowerCase()===u&&x.password===p);if(found)onLogin(found);else setErr("Wrong username or password.");};
+  return <div className="lw"><G/>
+    <div className="lc">
+      <div className="logo-big">🔧 AutoShop</div>
+      <div className="logo-sub">Workshop Management System</div>
+      {err&&<div className="err">{err}</div>}
+      <div className="f"><label>Username</label><input value={un} onChange={e=>setUn(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="Enter username" autoFocus/></div>
+      <div className="f"><label>Password</label><input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&go()} placeholder="Enter password"/></div>
+      <button className="btn bp bfull" style={{marginTop:10,padding:"13px",fontSize:15}} onClick={go}>Sign In →</button>
+      <div className="hint-box" style={{fontSize:11,color:"var(--mt)",textAlign:"center"}}>Contact your administrator for login details.</div>
+    </div>
+  </div>;
+}
+
+// ── APP ROOT ──────────────────────────────────────────────────────────────────
+// Local storage helpers (persists in browser even if Supabase unreachable)
+const lsGet=async(k,fb)=>{try{const v=localStorage.getItem(k);return v?JSON.parse(v):fb;}catch{return fb;}};
+const lsSave=async(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
+const LSK={j:"as3_j",u:"as3_u",co:"as3_co",cw:"as3_cw",mc:"as3_mc",s:"as3_s"};
+
+function App(){
+  const [users,setUsers]=useState(DEF_USERS);
+  const [jobs,setJobs]=useState([]);
+  const [companies,setCompanies]=useState([]);
+  const [cwSvc,setCwSvc]=useState([]);
+  const [mcSvc,setMcSvc]=useState([]);
+  const [sessions,setSessions]=useState([]);
+  const [me,setMe]=useState(null);
+  const [ready,setReady]=useState(false);
+  const [dbStatus,setDbStatus]=useState("connecting");
+
+  const load=async()=>{
+    // Step 1: load local data immediately so UI shows fast
+    const [lj,lco,lcw,lmc,ls,lu]=await Promise.all([
+      lsGet(LSK.j,[]),lsGet(LSK.co,[]),lsGet(LSK.cw,[]),lsGet(LSK.mc,[]),lsGet(LSK.s,[]),lsGet(LSK.u,DEF_USERS)
+    ]);
+    if(lj.length)setJobs(lj);
+    if(lco.length)setCompanies(lco); else setCompanies([]);
+    if(lcw.length)setCwSvc(lcw); else setCwSvc([]);
+    if(lmc.length)setMcSvc(lmc); else setMcSvc([]);
+    if(ls.length)setSessions(ls);
+    if(lu.length)setUsers(lu);
+    setReady(true);
+
+    // Step 2: sync with Supabase in background
+    try{
+      const [u,j,co,cw,mc,s]=await Promise.all([
+        sbGet("users","select=*"),
+        sbGet("jobs","select=*&order=created_at.desc"),
+        sbGet("companies","select=name&order=name"),
+        sbGet("cw_services","select=name&order=name"),
+        sbGet("mc_services","select=name&order=name"),
+        sbGet("timer_sessions","select=*"),
+      ]);
+      if(Array.isArray(j)){const jj=j.map(db2j);setJobs(jj);lsSave(LSK.j,jj);}
+      if(Array.isArray(co)&&co.length){const cc=co.map(r=>r.name);setCompanies(cc);lsSave(LSK.co,cc);}
+      if(Array.isArray(cw)&&cw.length){const cc=cw.map(r=>r.name);setCwSvc(cc);lsSave(LSK.cw,cc);}
+      if(Array.isArray(mc)&&mc.length){const cc=mc.map(r=>r.name);setMcSvc(cc);lsSave(LSK.mc,cc);}
+      if(Array.isArray(s)){const ss=s.map(db2s);setSessions(ss);lsSave(LSK.s,ss);}
+      if(Array.isArray(u)&&u.length){setUsers(u);lsSave(LSK.u,u);}
+      setDbStatus("online");
+    }catch(e){setDbStatus("offline");}
+  };
+  useEffect(()=>{load();},[]);
+
+  // All writes go to local storage first, then Supabase
+  const addJob=async j=>{
+    const next=[j,...jobs];setJobs(next);lsSave(LSK.j,next);
+    sbPost("jobs",j2db(j));
+  };
+  const updJob=async j=>{
+    const next=jobs.map(x=>x.id===j.id?j:x);setJobs(next);lsSave(LSK.j,next);
+    sbPatch("jobs","id=eq."+j.id,j2db(j));
+  };
+  const delJob=async id=>{
+    const next=jobs.filter(x=>x.id!==id);setJobs(next);lsSave(LSK.j,next);
+    sbDel("jobs","id=eq."+id);
+  };
+  const addW=async w=>{
+    const next=[...users,w];setUsers(next);lsSave(LSK.u,next);
+    sbPost("users",w);
+  };
+  const changePw=async(id,pw)=>{
+    const next=users.map(u=>u.id===id?{...u,password:pw}:u);
+    setUsers(next);lsSave(LSK.u,next);
+    await sbPatch("users","id=eq."+id,{password:pw});
+  };
+  const delW=async id=>{
+    const next=users.filter(u=>u.id!==id);setUsers(next);lsSave(LSK.u,next);
+    sbDel("users","id=eq."+id);
+  };
+  const addCo=async n=>{
+    if(companies.includes(n))return;
+    const next=[...companies,n].sort();setCompanies(next);lsSave(LSK.co,next);
+    sbPost("companies",{name:n});
+  };
+  const delCo=async n=>{
+    const next=companies.filter(c=>c!==n);setCompanies(next);lsSave(LSK.co,next);
+    sbDel("companies","name=eq."+encodeURIComponent(n));
+  };
+  const addCw=async n=>{
+    if(cwSvc.includes(n))return;
+    const next=[...cwSvc,n];setCwSvc(next);lsSave(LSK.cw,next);
+    sbPost("cw_services",{name:n});
+  };
+  const delCw=async n=>{
+    const next=cwSvc.filter(s=>s!==n);setCwSvc(next);lsSave(LSK.cw,next);
+    sbDel("cw_services","name=eq."+encodeURIComponent(n));
+  };
+  const addMc=async n=>{
+    if(mcSvc.includes(n))return;
+    const next=[...mcSvc,n];setMcSvc(next);lsSave(LSK.mc,next);
+    sbPost("mc_services",{name:n});
+  };
+  const delMc=async n=>{
+    const next=mcSvc.filter(s=>s!==n);setMcSvc(next);lsSave(LSK.mc,next);
+    sbDel("mc_services","name=eq."+encodeURIComponent(n));
+  };
+  const startS=async s=>{
+    const next=[...sessions.filter(x=>!(x.wid===s.wid&&x.status==="running")),s];setSessions(next);lsSave(LSK.s,next);
+    sbPost("timer_sessions",s2db(s));
+  };
+  const pauseS=async s=>{
+    const next=sessions.map(x=>x.id===s.id?s:x);setSessions(next);lsSave(LSK.s,next);
+    sbPatch("timer_sessions","id=eq."+s.id,s2db(s));
+  };
+  const resumeS=async s=>{
+    const next=sessions.map(x=>x.id===s.id?s:x);setSessions(next);lsSave(LSK.s,next);
+    sbPatch("timer_sessions","id=eq."+s.id,s2db(s));
+  };
+  const stopS=async s=>{
+    const next=sessions.map(x=>x.id===s.id?s:x);setSessions(next);lsSave(LSK.s,next);
+    sbPatch("timer_sessions","id=eq."+s.id,s2db(s));
+  };
+
+  if(!ready)return <div style={{minHeight:"100vh",background:"#0D1117",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:14}}><G/><div style={{fontFamily:"Bebas Neue,sans-serif",fontSize:32,letterSpacing:3,color:"#1DC8A0"}}>🔧 AutoShop</div><div style={{fontSize:13,color:"#6B7A99"}}>Loading your data…</div></div>;
+  if(!me)return <LoginPage users={users} onLogin={setMe}/>;
+  const sh={companies,onAddCo:addCo};
+  const dbDot=dbStatus==="online"?{color:"#1DC8A0",title:"Synced with cloud"}:dbStatus==="offline"?{color:"#FFA940",title:"Saved locally (cloud unavailable)"}:{color:"#6B7A99",title:"Connecting…"};
+  if(me.role==="worker"&&me.type==="carwash")return <WorkerPage user={me} jobs={jobs} services={cwSvc} sessions={sessions} isMC={false} onAdd={addJob} onUpd={updJob} onAddSvc={addCw} onStartS={startS} onPauseS={pauseS} onResumeS={resumeS} onStopS={stopS} onLogout={()=>setMe(null)} onChangePw={changePw} {...sh}/>;
+  if(me.role==="worker"&&me.type==="mechanic")return <WorkerPage user={me} jobs={jobs} services={mcSvc} sessions={sessions} isMC={true} onAdd={addJob} onUpd={updJob} onAddSvc={addMc} onStartS={startS} onPauseS={pauseS} onResumeS={resumeS} onStopS={stopS} onLogout={()=>setMe(null)} onChangePw={changePw} {...sh}/>;
+  return <OwnerPage user={me} users={users} jobs={jobs} companies={companies} cwSvc={cwSvc} mcSvc={mcSvc} sessions={sessions} onAddW={addW} onDelW={delW} onDelJ={delJob} onUpdJ={updJob} onAddCo={addCo} onDelCo={delCo} onAddCw={addCw} onDelCw={delCw} onAddMc={addMc} onDelMc={delMc} onLogout={()=>setMe(null)} onRefresh={load} dbStatus={dbStatus}/>;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+
+  </script>
+</body>
+</html>
