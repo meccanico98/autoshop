@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>AutoShop</title>
   <meta name="theme-color" content="#1DC8A0"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="AutoShop"/>
-  <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js" crossorigin></script>
-  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js" crossorigin></script>
-  <script src="https://unpkg.com/recharts@2.8.0/umd/Recharts.min.js" crossorigin onerror="window.Recharts={}"></script>
-  <script src="https://unpkg.com/@babel/standalone@7.23.3/babel.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin></script>
+  <script src="https://cdn.jsdelivr.net/npm/recharts@2.8.0/umd/Recharts.min.js" crossorigin onerror="window.Recharts={}"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.3/babel.min.js" crossorigin></script>
 </head>
 <body style="margin:0">
   <div id="root"></div>
@@ -677,7 +677,7 @@ function OwnerPage({user,users,jobs,companies,cwSvc,mcSvc,sessions,onAddW,onDelW
       <div className="sb-foot"><div style={{fontSize:11,color:"var(--mt)",marginBottom:8}}>👤 {user.name}</div><button className="theme-btn" onClick={toggleTheme}>{theme==="dark"?"☀️ Light Mode":"🌙 Dark Mode"}</button><button className="btn bs bsm" style={{marginTop:8,width:"100%"}} onClick={()=>setShowCPW(true)}>🔑 Change Password</button><button className="btn bs bsm" style={{marginTop:6,width:"100%"}} onClick={onLogout}>Logout</button></div>
     </div>
     <div className="main-area">
-      {isMobile&&<div style={{position:"sticky",top:0,zIndex:101,background:"#0A0F1C",borderBottom:"1px solid #141C2E",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",msOverflowStyle:"none"}}>
+      {window.innerWidth<=768&&<div style={{position:"sticky",top:0,zIndex:101,background:"#0A0F1C",borderBottom:"1px solid #141C2E",display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",msOverflowStyle:"none"}}>
         {NAV.map(n=><button key={n.id} onClick={()=>setNav(n.id)} style={{flexShrink:0,padding:"12px 14px",background:"transparent",border:"none",borderBottom:nav===n.id?"3px solid #1DC8A0":"3px solid transparent",color:nav===n.id?"#1DC8A0":"#5A6B88",fontSize:12,fontWeight:600,cursor:"pointer",whiteSpace:"nowrap",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:5,WebkitTapHighlightColor:"transparent"}}>
           <span>{n.icon}</span><span>{n.label}</span>
           {n.badge>0&&<span style={{background:"#FF6B6B",color:"#fff",borderRadius:20,padding:"1px 5px",fontSize:10,minWidth:16,textAlign:"center"}}>{n.badge}</span>}
