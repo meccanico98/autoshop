@@ -11,14 +11,12 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin></script>
-  <script src="https://cdn.jsdelivr.net/npm/recharts@2.8.0/umd/Recharts.min.js" crossorigin onerror="window.Recharts={}"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.3/babel.min.js" crossorigin></script>
 </head>
 <body style="margin:0">
   <div id="root"></div>
   <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef } = React;
-const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } = (typeof Recharts !== 'undefined') ? Recharts : {};
 
 const SBU="https://kxpqgomkuftwdrvuoiyr.supabase.co";
 const SBK="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt4cHFnb21rdWZ0d2RydnVvaXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NjMyMjksImV4cCI6MjA5NjEzOTIyOX0.1x9379Q-0oC9ZEZAx7oKdUIyBS4bcsi7MpFJUUo7RSU";
@@ -495,19 +493,48 @@ function LiveTab({sessions}){
 
 // ── CHARTS ────────────────────────────────────────────────────────────────────
 function RevenueChart({jobs}){
-  if(typeof Recharts==="undefined"||!ResponsiveContainer)return <div style={{height:190,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--mt)",fontSize:13}}>📊 Chart loading...</div>;
-  const days=Array.from({length:7},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(6-i));const ds=d.toISOString().split("T")[0];const dj=jobs.filter(j=>j.date===ds);return{day:d.toLocaleDateString("en-GB",{weekday:"short"}),cw:dj.filter(j=>j.workshopType==="carwash").reduce((s,j)=>s+(j.jobBill||0),0),mc:dj.filter(j=>j.workshopType==="mechanic").reduce((s,j)=>s+(j.profit||0),0)};});
-  const tt=({active,payload,label})=>active&&payload?.length?<div style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:"8px 12px",fontSize:12}}><div style={{fontWeight:700,marginBottom:4}}>{label}</div>{payload.map((p,i)=><div key={i} style={{color:p.fill}}>{p.name}: {money(p.value)}</div>)}</div>:null;
-  try{return <ResponsiveContainer width="100%" height={190}><BarChart data={days} barGap={4}><XAxis dataKey="day" tick={{fill:"var(--mt)",fontSize:11}} axisLine={false} tickLine={false}/><YAxis tick={{fill:"var(--mt)",fontSize:10}} axisLine={false} tickLine={false} width={40}/><Tooltip content={tt} cursor={{fill:"rgba(255,255,255,.03)"}}/><Bar dataKey="cw" fill="#4F9EF8" name="Car Wash" radius={[4,4,0,0]}/><Bar dataKey="mc" fill="#1DC8A0" name="MC Profit" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer>;}catch(e){return <div style={{height:190,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--mt)",fontSize:13}}>Chart unavailable</div>;}
+  const days=Array.from({length:7},(_,i)=>{
+    const d=new Date();d.setDate(d.getDate()-(6-i));
+    const ds=d.toISOString().split("T")[0];
+    const dj=jobs.filter(j=>j.date===ds);
+    return{day:d.toLocaleDateString("en-GB",{weekday:"short"}),
+      cw:dj.filter(j=>j.workshopType==="carwash").reduce((s,j)=>s+(j.jobBill||0),0),
+      mc:dj.filter(j=>j.workshopType==="mechanic").reduce((s,j)=>s+(j.profit||0),0)};
+  });
+  const maxVal=Math.max(...days.map(d=>Math.max(d.cw,d.mc)),1);
+  return <div style={{padding:"0 4px"}}>
+    <div style={{display:"flex",alignItems:"flex-end",gap:6,height:150,marginBottom:6}}>
+      {days.map((d,i)=><div key={i} style={{flex:1,display:"flex",gap:2,alignItems:"flex-end",height:"100%"}}>
+        <div style={{flex:1,background:"#4F9EF8",borderRadius:"3px 3px 0 0",height:`${Math.max((d.cw/maxVal)*100,d.cw?2:0)}%`,transition:"height .3s",title:`CW: ${money(d.cw)}`}}/>
+        <div style={{flex:1,background:"#1DC8A0",borderRadius:"3px 3px 0 0",height:`${Math.max((d.mc/maxVal)*100,d.mc?2:0)}%`,transition:"height .3s"}}/>
+      </div>)}
+    </div>
+    <div style={{display:"flex",gap:6}}>
+      {days.map((d,i)=><div key={i} style={{flex:1,textAlign:"center",fontSize:9,color:"var(--mt)"}}>{d.day}</div>)}
+    </div>
+    <div style={{display:"flex",gap:12,marginTop:8,justifyContent:"center"}}>
+      <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"var(--mt)"}}><div style={{width:10,height:10,borderRadius:2,background:"#4F9EF8"}}/>Car Wash</div>
+      <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,color:"var(--mt)"}}><div style={{width:10,height:10,borderRadius:2,background:"#1DC8A0"}}/>MC Profit</div>
+    </div>
+  </div>;
 }
 function ServiceDonut({jobs}){
-  if(typeof Recharts==="undefined"||!PieChart)return <div style={{height:190,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--mt)",fontSize:13}}>🍩 Chart loading...</div>;
   const mp={};jobs.forEach(j=>{mp[j.service]=(mp[j.service]||0)+1;});
-  const data=Object.entries(mp).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([name,value])=>({name,value}));
+  const data=Object.entries(mp).sort((a,b)=>b[1]-a[1]).slice(0,5);
+  const total=data.reduce((s,[,v])=>s+v,0)||1;
   const COLS=["#1DC8A0","#4F9EF8","#FFA940","#FF6B6B","#A78BFA"];
   if(!data.length)return <div className="empty">No data yet</div>;
-  const tt=({active,payload})=>active&&payload?.length?<div style={{background:"var(--s2)",border:"1px solid var(--bd)",borderRadius:8,padding:"8px 12px",fontSize:12}}>{payload[0].name}: {payload[0].value}</div>:null;
-  try{return <ResponsiveContainer width="100%" height={190}><PieChart><Pie data={data} dataKey="value" cx="50%" cy="50%" innerRadius={52} outerRadius={80} paddingAngle={3}>{data.map((_,i)=><Cell key={i} fill={COLS[i%5]}/>)}</Pie><Tooltip content={tt}/></PieChart></ResponsiveContainer>;}catch(e){return <div style={{height:190,display:"flex",alignItems:"center",justifyContent:"center",color:"var(--mt)",fontSize:13}}>Chart unavailable</div>;}
+  return <div style={{padding:"4px 0"}}>
+    {data.map(([name,count],i)=><div key={name} style={{marginBottom:10}}>
+      <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}}>
+        <span style={{display:"flex",alignItems:"center",gap:6}}><span style={{width:8,height:8,borderRadius:"50%",background:COLS[i],display:"inline-block"}}/>{name}</span>
+        <span style={{color:"var(--mt)",fontSize:11}}>{count} ({Math.round(count/total*100)}%)</span>
+      </div>
+      <div style={{height:5,background:"var(--s2)",borderRadius:3,overflow:"hidden"}}>
+        <div style={{width:`${count/total*100}%`,height:"100%",background:COLS[i],borderRadius:3,transition:"width .3s"}}/>
+      </div>
+    </div>)}
+  </div>;
 }
 
 // ── WORKER PAGE ───────────────────────────────────────────────────────────────
